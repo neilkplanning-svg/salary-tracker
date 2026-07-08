@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>מעקב שכר</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#14274E">
+  <link rel="apple-touch-icon" href="./icons/icon.svg">
+  <link rel="stylesheet" href="src/ui/theme.css" />
+  <script type="module" src="src/ui/app.js"></script>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <h1>מעקב שכר</h1>
+      <button id="theme-toggle" aria-label="החלף ערכת נושא">🌙</button>
+    </header>
+    <nav id="main-nav">
+      <a href="#attendance">נוכחות</a>
+      <a href="#estimate">משוער</a>
+      <a href="#actual">בפועל</a>
+      <a href="#reductions">הפחתות</a>
+      <a href="#aidfund">קרן עזרה</a>
+      <a href="#dollarfund">קרן דולרית</a>
+      <a href="#history">היסטוריה</a>
+      <a href="#settings">הגדרות</a>
+    </nav>
+    <main id="screen-container">
+      <div class="placeholder-notice">
+        <p>האפליקציה בבנייה</p>
+        <p style="font-size:0.85em;opacity:0.7;">WP0.1 — Scaffolding</p>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

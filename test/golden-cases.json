@@ -1,0 +1,1045 @@
+[
+  {
+    "id": "2026-06-full",
+    "description": "יוני 2026 — חישוב מלא עם זקיפה, מנגנון זיכוי-חסכון (WP8.8b) — ערכים סינתטיים",
+    "_note": "ערכים סינתטיים לבדיקת מנוע בלבד; אינם נתון אישי. משחזר calcPensionSavingsCredit במקום מדרגה-ראשונה-דינמית (V33) — ראו excel-formulas.md §16.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 19040.74, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 11.75,
+        "pensionRateEmployee": 0.07,
+        "pensionBaseFactor": 0.9895,
+        "trainingFundRateEmployee": 0.025,
+        "overtimeHourValue": 0,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [
+          { "amount": 780.85, "taxable": true }
+        ],
+        "otherDeductions": [
+          { "amount": 237.27 }
+        ]
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 19040.74, "incomeTax": 88.89, "nationalInsurance": 928.34, "healthTax": 875.29, "pension": 1318.86, "trainingFund": 392.8, "net": 15199.29 }
+  },
+  {
+    "id": "2026-01-gross",
+    "description": "ינואר 2026 — אימות גרוס בלבד — ערך סינתטי",
+    "_note": "ערך סינתטי לבדיקת מנוע; אינו נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 19288.78, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 11.75,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "overtimeHourValue": 0,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 19288.78 }
+  },
+  {
+    "id": "2026-02-gross",
+    "description": "פברואר 2026 — אימות גרוס בלבד — ערך סינתטי",
+    "_note": "ערך סינתטי לבדיקת מנוע; אינו נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 19343.6, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 11.75,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "overtimeHourValue": 0,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 19343.6 }
+  },
+  {
+    "id": "2026-03-gross",
+    "description": "מרץ 2026 — אימות גרוס בלבד — ערך סינתטי",
+    "_note": "ערך סינתטי לבדיקת מנוע; אינו נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 18958.62, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 11.75,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "overtimeHourValue": 0,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 18958.62 }
+  },
+  {
+    "id": "2026-04-gross",
+    "description": "אפריל 2026 — אימות גרוס בלבד — ערך סינתטי",
+    "_note": "ערך סינתטי לבדיקת מנוע; אינו נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 17617.02, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 11.75,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "overtimeHourValue": 0,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 17617.02 }
+  },
+  {
+    "id": "2026-05-gross",
+    "description": "מאי 2026 — אימות גרוס בלבד — ערך סינתטי",
+    "_note": "ערך סינתטי לבדיקת מנוע; אינו נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 18498.15, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 11.75,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "overtimeHourValue": 0,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 18498.15 }
+  },
+  {
+    "id": "2025-01-gross",
+    "description": "ינואר 2025 — אימות גרוס בלבד — ערך סינתטי",
+    "_note": "ערך סינתטי לבדיקת מנוע; אינו נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 18598, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 11.75,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "overtimeHourValue": 0,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 18598 }
+  },
+  {
+    "id": "2025-06-gross",
+    "description": "יוני 2025 — אימות גרוס בלבד — ערך סינתטי",
+    "_note": "ערך סינתטי לבדיקת מנוע; אינו נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 17798, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 11.75,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "overtimeHourValue": 0,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 17798 }
+  },
+  {
+    "id": "2026-06-overtime",
+    "description": "יוני 2026 — תת-מנוע שעות נוספות (WP1.3): 24 שעות מאושרות ב-7 ימים → גורם 1.3",
+    "_note": "מאמת את הנוסחה הלוגריתמית מהאקסל: P18=1.3, P20=24×LOG(24,8)×1.3=47.6836, N5=P20×76.23=3634.92 (המנוע מחזיר N5; גורם 0.988→M5 הוא OI-05 עתידי). ימים: 4+4+4+4+4+2+2=24, 7 ימים.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712,
+        "overtimeRules": { "logBase": 8, "minOvertimeForBonus": 11.9, "maxHoursForTier1": 19.9, "minDaysForBonus": 6, "factorBase": 1, "factorTier1": 1.25, "factorTier2": 1.3 }
+      },
+      "personal": {
+        "baseSalary": { "baseConst": 0, "perHourConst": 0, "adjustFactor": 1 },
+        "positionPercent": 100,
+        "creditPointsQty": 0,
+        "pensionRateEmployee": 0,
+        "trainingFundRateEmployee": 0,
+        "overtimeHourValue": 76.23,
+        "fixedAdditions": { "car": 0, "phone": 0, "other": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": [
+          { "overtimeHours": 4 },
+          { "overtimeHours": 4 },
+          { "overtimeHours": 4 },
+          { "overtimeHours": 4 },
+          { "overtimeHours": 4 },
+          { "overtimeHours": 2 },
+          { "overtimeHours": 2 }
+        ]
+      },
+      "reductions": null
+    },
+    "expected": { "overtimePay": 3634.92 }
+  },
+  {
+    "id": "engineer-05-2026",
+    "description": "earnings[] גנרי: בסיסי פנסיה/קה\"ש/ב\"ל + פנסיה שנייה — מקרה אימות מנוע, ערכים סינתטיים (WP2.4/WP8.8b)",
+    "_note": "ערכים סינתטיים לבדיקת מנוע בלבד; אינם נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712,
+        "trainingFundRateEmployer": 0.075,
+        "overtimeRules": { "logBase": 8, "minOvertimeForBonus": 11.9, "maxHoursForTier1": 19.9, "minDaysForBonus": 6, "factorBase": 1, "factorTier1": 1.25, "factorTier2": 1.3 }
+      },
+      "personal": {
+        "earnings": [
+          { "id": "base-incentive-seniority", "label": "שכר יסוד + עידוד + ותק", "amount": 12646.57, "inTax": true, "inNI": true, "inPension": true, "inTraining": true },
+          { "id": "duty", "label": "כוננות", "amount": 1393.61, "inTax": true, "inNI": true, "inPension": true, "inTraining": false },
+          { "id": "car-additions", "label": "רכב + תוספות + ש\"נ", "amount": 5085.21, "inTax": true, "inNI": true, "inPension": false, "inTraining": false }
+        ],
+        "trainingFundDepositAboveCap": false,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "creditPointsQty": 0,
+        "overtimeHourValue": 0,
+        "imputations": [],
+        "otherDeductions": [],
+        "ancillaryPensionBase": 4425.6,
+        "pensionRateEmployee2": 0.07
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "pensionBase": 14040.18, "trainingFundBase": 12646.57, "trainingFund": 316.16, "trainingComplement": 0, "nationalInsurance": 879.61, "healthTax": 839.29, "pension": 982.81, "pension2": 309.79 }
+  },
+  {
+    "id": "research-06-2026",
+    "description": "מקרה אימות מנוע — earnings[] מ-3 בסיסים — ערכים סינתטיים (WP8.10)",
+    "_note": "ערכים סינתטיים; אינו נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712,
+        "trainingFundRateEmployer": 0.075,
+        "overtimeRules": { "logBase": 8, "minOvertimeForBonus": 11.9, "maxHoursForTier1": 19.9, "minDaysForBonus": 6, "factorBase": 1, "factorTier1": 1.25, "factorTier2": 1.3 }
+      },
+      "personal": {
+        "earnings": [
+          { "id": "base", "label": "שכר בסיס למחקר (בסיס קה\"ש: יסוד+ותק-למחקר+שונות+שונות-א+עידוד)", "amount": 14531.03, "inTax": true, "inNI": true, "inPension": true, "inTraining": true },
+          { "id": "duty", "label": "כוננות (270) + רכיב 5293 לא-מזוהה", "amount": 2666.25, "inTax": true, "inNI": true, "inPension": true, "inTraining": false },
+          { "id": "ni-only", "label": "רכב + טלפון + 1954 + שארית (ב\"ל/מס בלבד)", "amount": 4429.26, "inTax": true, "inNI": true, "inPension": false, "inTraining": false }
+        ],
+        "trainingFundDepositAboveCap": false,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "creditPointsQty": 11.75,
+        "overtimeHourValue": 0,
+        "imputations": [],
+        "otherDeductions": [],
+        "ancillaryPensionBase": 0,
+        "pensionRateEmployee2": 0.07
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 21626.54, "pensionBase": 17197.28, "trainingFundBase": 14531.03, "trainingFund": 363.28, "trainingComplement": 0, "niBase": 21626.54, "nationalInsurance": 1054.69, "healthTax": 968.6, "pension": 1203.81, "pension2": 0 }
+  },
+  {
+    "id": "contract-06-2025",
+    "description": "חוזה אישי — אימות מלא מול חישוב המנוע — ערכים סינתטיים (WP8.8)",
+    "_note": "ערכים סינתטיים; אינם נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 16150, "rate": 0.2 },
+          { "min": 16151, "max": 22440, "rate": 0.31 },
+          { "min": 22441, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7522, "rate": 0.0104 },
+          { "min": 7523, "max": 50695, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7522, "rate": 0.0323 },
+          { "min": 7523, "max": 50695, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712,
+        "trainingFundRateEmployer": 0.075,
+        "overtimeRules": { "logBase": 8, "minOvertimeForBonus": 11.9, "maxHoursForTier1": 19.9, "minDaysForBonus": 6, "factorBase": 1, "factorTier1": 1.25, "factorTier2": 1.3 }
+      },
+      "personal": {
+        "earnings": [
+          { "id": "base", "label": "שכר בסיסי (בסיס קה\"ש)", "amount": 12555.3, "inTax": true, "inNI": true, "inPension": true, "inTraining": true },
+          { "id": "pension-extra", "label": "תוספות פנסיוניות", "amount": 805.58, "inTax": true, "inNI": true, "inPension": true, "inTraining": false },
+          { "id": "ni-only", "label": "רכב + ש\"נ + החזרים (ב\"ל/מס בלבד)", "amount": 4262.43, "inTax": true, "inNI": true, "inPension": false, "inTraining": false }
+        ],
+        "trainingFundDepositAboveCap": true,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "creditPointsQty": 9.25,
+        "overtimeHourValue": 0,
+        "imputations": [
+          { "id": "payslip-taxable", "label": "סה\"כ זקיפות (כולל זקיפה לקה\"ל 99.10)", "amount": 529.17, "taxable": true }
+        ],
+        "otherDeductions": [],
+        "ancillaryPensionBase": 4371.45,
+        "pensionRateEmployee2": 0.07
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 17623.31, "pensionBase": 13360.88, "trainingFundBase": 12555.3, "trainingFund": 313.88, "trainingComplement": 0, "pension": 935.26, "pension2": 306, "niBase": 18152.48, "nationalInsurance": 822.29, "healthTax": 792.5 }
+  },
+  {
+    "id": "contract-03-2023",
+    "description": "חוזה אישי — אימות מלא מול חישוב המנוע — ערכים סינתטיים (WP8.8)",
+    "_note": "ערכים סינתטיים; אינם נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 6790, "rate": 0.1 },
+          { "min": 6791, "max": 9730, "rate": 0.14 },
+          { "min": 9731, "max": 15620, "rate": 0.2 },
+          { "min": 15621, "max": 21710, "rate": 0.31 },
+          { "min": 21711, "max": 45180, "rate": 0.35 },
+          { "min": 45181, "max": 58190, "rate": 0.47 },
+          { "min": 58191, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 235,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7122, "rate": 0.004 },
+          { "min": 7123, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7122, "rate": 0.031 },
+          { "min": 7123, "max": 47465, "rate": 0.05 }
+        ],
+        "trainingFundCap": 15712,
+        "trainingFundRateEmployer": 0.075,
+        "overtimeRules": { "logBase": 8, "minOvertimeForBonus": 11.9, "maxHoursForTier1": 19.9, "minDaysForBonus": 6, "factorBase": 1, "factorTier1": 1.25, "factorTier2": 1.3 }
+      },
+      "personal": {
+        "earnings": [
+          { "id": "base", "label": "שכר בסיסי (בסיס קה\"ש)", "amount": 12256.62, "inTax": true, "inNI": true, "inPension": true, "inTraining": true },
+          { "id": "pension-extra", "label": "תוספות פנסיוניות", "amount": 1075.08, "inTax": true, "inNI": true, "inPension": true, "inTraining": false },
+          { "id": "ni-only", "label": "רכב + ש\"נ + החזרים (ב\"ל/מס בלבד)", "amount": 4447.09, "inTax": true, "inNI": true, "inPension": false, "inTraining": false }
+        ],
+        "trainingFundDepositAboveCap": true,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "creditPointsQty": 4.75,
+        "overtimeHourValue": 0,
+        "imputations": [
+          { "id": "payslip-taxable", "label": "סה\"כ זקיפות (כולל זקיפה לקה\"ל 68.71)", "amount": 791.85, "taxable": true }
+        ],
+        "otherDeductions": [],
+        "ancillaryPensionBase": 4360.69,
+        "pensionRateEmployee2": 0.07
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 17778.79, "pensionBase": 13331.7, "trainingFundBase": 12256.62, "trainingFund": 306.42, "trainingComplement": 0, "pension": 933.22, "pension2": 305.25, "niBase": 18570.64, "nationalInsurance": 829.82, "healthTax": 793.16 }
+  },
+  {
+    "id": "contract-03-2024-bases",
+    "description": "חוזה אישי — אימות בסיסים + ב\"ל/בריאות — ערכים סינתטיים (WP8.8)",
+    "_note": "ערכים סינתטיים; אינם נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 16150, "rate": 0.2 },
+          { "min": 16151, "max": 22440, "rate": 0.31 },
+          { "min": 22441, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7522, "rate": 0.004 },
+          { "min": 7523, "max": 49030, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7522, "rate": 0.031 },
+          { "min": 7523, "max": 49030, "rate": 0.05 }
+        ],
+        "trainingFundCap": 15712,
+        "trainingFundRateEmployer": 0.075,
+        "overtimeRules": { "logBase": 8, "minOvertimeForBonus": 11.9, "maxHoursForTier1": 19.9, "minDaysForBonus": 6, "factorBase": 1, "factorTier1": 1.25, "factorTier2": 1.3 }
+      },
+      "personal": {
+        "earnings": [
+          { "id": "base", "label": "שכר בסיסי (בסיס קה\"ש)", "amount": 12261.14, "inTax": true, "inNI": true, "inPension": true, "inTraining": true },
+          { "id": "pension-extra", "label": "תוספות פנסיוניות", "amount": 1084.32, "inTax": true, "inNI": true, "inPension": true, "inTraining": false },
+          { "id": "ni-only", "label": "רכב + ש\"נ + החזרים (ב\"ל/מס בלבד)", "amount": 5549.5, "inTax": true, "inNI": true, "inPension": false, "inTraining": false }
+        ],
+        "trainingFundDepositAboveCap": true,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "creditPointsQty": 4.75,
+        "overtimeHourValue": 0,
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 18894.96, "pensionBase": 13345.46, "trainingFundBase": 12261.14, "trainingFund": 306.53, "trainingComplement": 0, "pension": 934.18, "niBase": 18894.96, "nationalInsurance": 826.13, "healthTax": 801.78 }
+  },
+  {
+    "id": "catalog-lookup-by-id",
+    "description": "WP2.4 — earnings לפי id מהקטלוג (ללא flags inline): מוודא resolveEarningFlags lookup — ערכים סינתטיים",
+    "_note": "ערכים סינתטיים לבדיקת מנוע בלבד; אינם נתון אישי.",
+    "input": {
+      "national": {
+        "incomeTaxBrackets": [
+          { "min": 0, "max": 7010, "rate": 0.1 },
+          { "min": 7011, "max": 10060, "rate": 0.14 },
+          { "min": 10061, "max": 19000, "rate": 0.2 },
+          { "min": 19001, "max": 25100, "rate": 0.31 },
+          { "min": 25101, "max": 46690, "rate": 0.35 },
+          { "min": 46691, "max": 60130, "rate": 0.47 },
+          { "min": 60131, "max": 150000, "rate": 0.5 }
+        ],
+        "creditPointValue": 242,
+        "nationalInsuranceBands": [
+          { "min": 0, "max": 7703, "rate": 0.0104 },
+          { "min": 7704, "max": 47465, "rate": 0.07 }
+        ],
+        "healthTaxBands": [
+          { "min": 0, "max": 7703, "rate": 0.0323 },
+          { "min": 7704, "max": 47465, "rate": 0.0517 }
+        ],
+        "trainingFundCap": 15712,
+        "trainingFundRateEmployer": 0.075,
+        "overtimeRules": { "logBase": 8, "minOvertimeForBonus": 11.9, "maxHoursForTier1": 19.9, "minDaysForBonus": 6, "factorBase": 1, "factorTier1": 1.25, "factorTier2": 1.3 }
+      },
+      "personal": {
+        "earnings": [
+          { "id": "base", "amount": 10869.18 },
+          { "id": "incentive", "amount": 1836.09 },
+          { "id": "duty", "amount": 1393.61 },
+          { "id": "salaryAdditions", "amount": 275.65 },
+          { "id": "phone", "amount": 34.61 }
+        ],
+        "trainingFundDepositAboveCap": false,
+        "pensionRateEmployee": 0.07,
+        "trainingFundRateEmployee": 0.025,
+        "creditPointsQty": 0,
+        "overtimeHourValue": 0,
+        "car": { "hasCompanyCar": false, "allowance": 0, "imputation": 0 },
+        "imputations": [],
+        "otherDeductions": []
+      },
+      "month": {
+        "days": []
+      },
+      "reductions": null
+    },
+    "expected": { "gross": 14409.14, "pensionBase": 14098.88, "trainingFundBase": 12705.27, "trainingFund": 317.63, "trainingComplement": 0, "niBase": 14409.14, "pension": 986.92 }
+  },
+  {
+    "id": "att-example1",
+    "type": "attendance",
+    "description": "דוגמה 1 מ-WORK_PLAN §B: 07:00→17:30, הפסקה 12:00–12:30 → רגיל=8:24, ש\"נ=1:36",
+    "_note": "quotaLine=07:00+8:54=15:54; breakDeducted=0.5; regularPaid=8.4; excess=1:36>1:00 → overtimeHours=1:36",
+    "input": {
+      "day": { "start": "07:00", "end": "17:30", "breakCode": 2, "dow": 0 },
+      "params": {
+        "approvedStartTime": 6.5,
+        "fullDayHours": 8.9,
+        "halfDayHours": 4.45,
+        "breakWindows": [
+          [
+            11,
+            11.5
+          ],
+          [
+            11.5,
+            12
+          ],
+          [
+            12,
+            12.5
+          ],
+          [
+            12.5,
+            13
+          ],
+          [
+            13,
+            13.5
+          ]
+        ],
+        "zeroHourCutoff": 17,
+        "firstBandHours": 1,
+        "fridayAllOvertime": true
+      }
+    },
+    "expected": { "regularPaid": 8.4, "zeroHours": 0, "unapprovedHours": 0, "overtimeHours": 1.6, "breakDeducted": 0.5, "isFullDay": true, "isHalfDay": false }
+  },
+  {
+    "id": "att-example2",
+    "type": "attendance",
+    "description": "דוגמה 2 מ-WORK_PLAN §B: 07:30→17:20, ללא הפסקה → אפס=0:36, ללא-אישור=0:20",
+    "_note": "quotaLine=07:30+8:54=16:24; excess=0:56≤1:00 → zero=16:24–17:00=0.6, unapproved=17:00–17:20=0.3333",
+    "input": {
+      "day": { "start": "07:30", "end": "17:20", "breakCode": null, "dow": 1 },
+      "params": {
+        "approvedStartTime": 6.5,
+        "fullDayHours": 8.9,
+        "halfDayHours": 4.45,
+        "breakWindows": [
+          [
+            11,
+            11.5
+          ],
+          [
+            11.5,
+            12
+          ],
+          [
+            12,
+            12.5
+          ],
+          [
+            12.5,
+            13
+          ],
+          [
+            13,
+            13.5
+          ]
+        ],
+        "zeroHourCutoff": 17,
+        "firstBandHours": 1,
+        "fridayAllOvertime": true
+      }
+    },
+    "expected": { "regularPaid": 8.9, "zeroHours": 0.6, "unapprovedHours": 0.3333, "overtimeHours": 0, "breakDeducted": 0, "isFullDay": true, "isHalfDay": false }
+  },
+  {
+    "id": "att-before-0630",
+    "type": "attendance",
+    "description": "כניסה לפני 06:30: 06:00→15:54, הפסקה 12:00–12:30 → unapproved_pre=0.5h, zero=0.5h (excess)",
+    "_note": "unapproved_pre=0.5; aStart=6.5; quotaLine=15.4; excess=0.5≤1.0 → zero=15.9-15.4=0.5 (<17:00); unapproved_post=0",
+    "input": {
+      "day": { "start": "06:00", "end": "15:54", "breakCode": 2, "dow": 0 },
+      "params": {
+        "approvedStartTime": 6.5,
+        "fullDayHours": 8.9,
+        "halfDayHours": 4.45,
+        "breakWindows": [
+          [
+            11,
+            11.5
+          ],
+          [
+            11.5,
+            12
+          ],
+          [
+            12,
+            12.5
+          ],
+          [
+            12.5,
+            13
+          ],
+          [
+            13,
+            13.5
+          ]
+        ],
+        "zeroHourCutoff": 17,
+        "firstBandHours": 1,
+        "fridayAllOvertime": true
+      }
+    },
+    "expected": { "regularPaid": 8.4, "zeroHours": 0.5, "unapprovedHours": 0.5, "overtimeHours": 0, "breakDeducted": 0.5, "isFullDay": true, "isHalfDay": false }
+  },
+  {
+    "id": "att-half-day",
+    "type": "attendance",
+    "description": "יום חצאי: 07:00→11:30 ללא הפסקה → isHalfDay=true, isFullDay=false",
+    "_note": "presenceInQuota=4.5 ≥ halfDayHours(4.45) → isHalfDay=true; excess=0",
+    "input": {
+      "day": { "start": "07:00", "end": "11:30", "breakCode": null, "dow": 0 },
+      "params": {
+        "approvedStartTime": 6.5,
+        "fullDayHours": 8.9,
+        "halfDayHours": 4.45,
+        "breakWindows": [
+          [
+            11,
+            11.5
+          ],
+          [
+            11.5,
+            12
+          ],
+          [
+            12,
+            12.5
+          ],
+          [
+            12.5,
+            13
+          ],
+          [
+            13,
+            13.5
+          ]
+        ],
+        "zeroHourCutoff": 17,
+        "firstBandHours": 1,
+        "fridayAllOvertime": true
+      }
+    },
+    "expected": { "regularPaid": 4.5, "zeroHours": 0, "unapprovedHours": 0, "overtimeHours": 0, "breakDeducted": 0, "isFullDay": false, "isHalfDay": true }
+  },
+  {
+    "id": "att-less-than-half",
+    "type": "attendance",
+    "description": "פחות מחצי יום: 07:00→10:00 → isHalfDay=false, isFullDay=false",
+    "_note": "presenceInQuota=3.0 < halfDayHours(4.45) → לא זכאי להשלמת חיסור ממאגרים",
+    "input": {
+      "day": { "start": "07:00", "end": "10:00", "breakCode": null, "dow": 0 },
+      "params": {
+        "approvedStartTime": 6.5,
+        "fullDayHours": 8.9,
+        "halfDayHours": 4.45,
+        "breakWindows": [
+          [
+            11,
+            11.5
+          ],
+          [
+            11.5,
+            12
+          ],
+          [
+            12,
+            12.5
+          ],
+          [
+            12.5,
+            13
+          ],
+          [
+            13,
+            13.5
+          ]
+        ],
+        "zeroHourCutoff": 17,
+        "firstBandHours": 1,
+        "fridayAllOvertime": true
+      }
+    },
+    "expected": { "regularPaid": 3, "zeroHours": 0, "unapprovedHours": 0, "overtimeHours": 0, "breakDeducted": 0, "isFullDay": false, "isHalfDay": false }
+  },
+  {
+    "id": "att-friday",
+    "type": "attendance",
+    "description": "שישי fridayAllOvertime: 07:00→13:00, הפסקה 11:00–11:30 → כל הנוכחות ש\"נ",
+    "_note": "overtime=(13.0-7.0)-0.5=5.5; regular=zero=0; חלון 06:30 והפסקה חלים גם בשישי (WORK_PLAN §B החלטה #2)",
+    "input": {
+      "day": { "start": "07:00", "end": "13:00", "breakCode": 0, "dow": 5 },
+      "params": {
+        "approvedStartTime": 6.5,
+        "fullDayHours": 8.9,
+        "halfDayHours": 4.45,
+        "breakWindows": [
+          [
+            11,
+            11.5
+          ],
+          [
+            11.5,
+            12
+          ],
+          [
+            12,
+            12.5
+          ],
+          [
+            12.5,
+            13
+          ],
+          [
+            13,
+            13.5
+          ]
+        ],
+        "zeroHourCutoff": 17,
+        "firstBandHours": 1,
+        "fridayAllOvertime": true
+      }
+    },
+    "expected": { "regularPaid": 0, "zeroHours": 0, "unapprovedHours": 0, "overtimeHours": 5.5, "breakDeducted": 0.5, "isFullDay": false, "isHalfDay": true }
+  },
+  {
+    "id": "month-halfday-only",
+    "type": "shortfall",
+    "description": "חודש עם יום חצאי בלבד (אין מאגרים) — כל החיסור עובר לירידת שכר",
+    "_note": "eligibleShortfall=8.9-4.5=4.4; pool=0 → salaryCutHours=4.4",
+    "input": {
+      "days": [
+        { "presenceInQuota": 4.5, "isFullDay": false, "isHalfDay": true, "zeroHours": 0, "overtimeHours": 0, "unapprovedHours": 0 }
+      ],
+      "params": { "fullDayHours": 8.9, "halfDayHours": 4.45, "fridayAllOvertime": true }
+    },
+    "expected": { "totalShortfall": 4.4, "coveredFromZero": 0, "coveredFromOT": 0, "coveredFromUnapproved": 0, "salaryCutHours": 4.4, "zeroUtilizationPct": 0 }
+  },
+  {
+    "id": "month-ot-partial",
+    "type": "shortfall",
+    "description": "יום מלא (1.6ש\"נ) + יום חצאי → ש\"נ מכסה חלקית, נשאר 2.8ש' ירידת שכר",
+    "_note": "totalOT=1.6; eligible=4.4; covOT=1.6; remaining=2.8=salaryCut",
+    "input": {
+      "days": [
+        { "presenceInQuota": 8.9, "isFullDay": true, "isHalfDay": false, "overtimeHours": 1.6, "zeroHours": 0, "unapprovedHours": 0 },
+        { "presenceInQuota": 4.5, "isFullDay": false, "isHalfDay": true, "overtimeHours": 0, "zeroHours": 0, "unapprovedHours": 0 }
+      ],
+      "params": { "fullDayHours": 8.9, "halfDayHours": 4.45, "fridayAllOvertime": true }
+    },
+    "expected": { "totalShortfall": 4.4, "coveredFromZero": 0, "coveredFromOT": 1.6, "coveredFromUnapproved": 0, "salaryCutHours": 2.8, "zeroUtilizationPct": 0 }
+  },
+  {
+    "id": "month-zero-full",
+    "type": "shortfall",
+    "description": "יום מלא עם 4.4ש' אפס + יום חצאי → שעות אפס מכסות חיסור במלואו",
+    "_note": "totalZero=4.4; eligible=4.4; covZero=4.4; salaryCut=0; zeroUtil=100%",
+    "input": {
+      "days": [
+        { "presenceInQuota": 8.9, "isFullDay": true, "isHalfDay": false, "zeroHours": 4.4, "overtimeHours": 0, "unapprovedHours": 0 },
+        { "presenceInQuota": 4.5, "isFullDay": false, "isHalfDay": true, "zeroHours": 0, "overtimeHours": 0, "unapprovedHours": 0 }
+      ],
+      "params": { "fullDayHours": 8.9, "halfDayHours": 4.45, "fridayAllOvertime": true }
+    },
+    "expected": { "totalShortfall": 4.4, "coveredFromZero": 4.4, "coveredFromOT": 0, "coveredFromUnapproved": 0, "salaryCutHours": 0, "zeroUtilizationPct": 100 }
+  },
+  {
+    "id": "month-leave-vac-skip",
+    "type": "shortfall",
+    "description": "WP8.3 — יום חופשה חלקי מוחרג מחיסור; יום חצאי רגיל → חיסור=4.4",
+    "_note": "day2 has leave=vacation → skip; day1 half-day → eligible=4.4; no pools → salaryCut=4.4",
+    "input": {
+      "days": [
+        { "date": "2025-06-02", "presenceInQuota": 4.5, "isFullDay": false, "isHalfDay": true, "zeroHours": 0, "overtimeHours": 0, "unapprovedHours": 0 },
+        {
+          "date": "2025-06-03",
+          "presenceInQuota": 4.5,
+          "isFullDay": false,
+          "isHalfDay": true,
+          "leave": { "type": "vacation", "hours": 4.4 },
+          "zeroHours": 0,
+          "overtimeHours": 0,
+          "unapprovedHours": 0
+        }
+      ],
+      "params": { "fullDayHours": 8.9, "halfDayHours": 4.45, "fridayAllOvertime": false }
+    },
+    "expected": { "totalShortfall": 4.4, "coveredFromZero": 0, "coveredFromOT": 0, "coveredFromUnapproved": 0, "salaryCutHours": 4.4 }
+  },
+  {
+    "id": "month-leave-training-skip",
+    "type": "shortfall",
+    "description": "WP8.3 — יום השתלמות מלא מוחרג לחלוטין → אין חיסור",
+    "_note": "training day (leave.type=training) → skip entirely; salaryCut=0",
+    "input": {
+      "days": [
+        {
+          "date": "2025-06-04",
+          "presenceInQuota": 0,
+          "leave": { "type": "training", "hours": 8.9 },
+          "zeroHours": 0,
+          "overtimeHours": 0,
+          "unapprovedHours": 0
+        }
+      ],
+      "params": { "fullDayHours": 8.9, "halfDayHours": 4.45, "fridayAllOvertime": false }
+    },
+    "expected": { "totalShortfall": 0, "coveredFromZero": 0, "coveredFromOT": 0, "coveredFromUnapproved": 0, "salaryCutHours": 0 }
+  }
+]

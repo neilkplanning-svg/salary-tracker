@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>בדיקות מנוע — מעקב שכר</title>
+  <style>
+    body { font-family: monospace; padding: 1rem; direction: rtl; }
+    .pass { color: #2a9d2a; }
+    .fail { color: #cc0000; font-weight: bold; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.85em; }
+    th, td { border: 1px solid #ccc; padding: 0.3rem 0.6rem; }
+    th { background: #f0f0f0; }
+    #summary { margin-top: 1rem; font-size: 1.1em; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>בדיקות מנוע חישוב</h1>
+  <p>בדיקות golden-cases מול האקסל המקורי — סטייה מותרת ≤ ₪1</p>
+  <div id="results">טוען...</div>
+  <div id="summary"></div>
+  <script type="module">
+    import { runTests } from './test/engine.test.js';
+    runTests(
+      document.getElementById('results'),
+      document.getElementById('summary')
+    );
+  </script>
+</body>
+</html>

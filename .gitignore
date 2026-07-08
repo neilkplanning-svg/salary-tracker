@@ -1,0 +1,23 @@
+# נתונים אישיים — לא לשמור ב-repo (קבצי מקור: אקסל מקורי + תלושים עם ת"ז/שכר)
+reference/
+
+# node
+node_modules/
+package-lock.json
+
+# build output
+salary.html
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/settings.json
+*.suo
+*.user
+
+# נתונים אישיים
+salary-data.json
+salary-backup.json

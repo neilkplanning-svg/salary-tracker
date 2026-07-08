@@ -1,0 +1,13 @@
+{
+  "name": "salary-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ניהול שכר local-first (vanilla JS, ללא build) — מחליף קובץ Excel",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "מעקב שכר",
+  "short_name": "שכר",
+  "lang": "he",
+  "dir": "rtl",
+  "display": "standalone",
+  "start_url": "./",
+  "scope": "./",
+  "theme_color": "#14274E",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}
