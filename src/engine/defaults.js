@@ -145,7 +145,6 @@ export const EARNING_COMPONENTS = [
   { id: 'carInsurance',      label: 'החזר ביטוחי רכב',   group: 'add',  inTax: true,  inNI: true,  inPension: false, inTraining: false, appliesToGrades: ['contract'] },
 
   // קבוצה: מיוחד — מחקר דולרי משולם נטו (לא חייב במס/ב"ל/פרישה); מתווסף לנטו בלבד
-  { id: 'researchDollar',    label: 'מחקר דולרי (נטו)',  group: 'special', inTax: false, inNI: false, inPension: false, inTraining: false, appliesToGrades: ['research'] },
 ];
 
 /**

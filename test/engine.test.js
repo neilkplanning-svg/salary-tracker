@@ -249,29 +249,27 @@ if (typeof process !== 'undefined' && process.env.NODE_TEST_CONTEXT) {
     });
   });
 
-  // WP10.10: רכיב "נטו-בלבד" (כל 4 ה-flags כבויים, למשל researchDollar) מוחרג מהברוטו ומתווסף לנטו
-  describe('calculate — רכיב נטו-בלבד מוחרג מהברוטו (WP10.10, תיקון researchDollar)', () => {
+  // 2026-07: רכיב "נטו-בלבד" (כל 4 ה-flags כבויים) אינו חלק מהתלוש — לא בברוטו ולא בנטו.
+  // (כסף כזה, למשל מחקר דולרי, מנוהל בקרן הדולרית הנפרדת; researchDollar הוסר מהקטלוג.)
+  describe('calculate — רכיב נטו-בלבד אינרטי (לא בברוטו, לא בנטו)', () => {
     const catalogCase = goldenCases.find(t => t.id === 'catalog-lookup-by-id');
 
-    it('researchDollar (amount>0, כל ה-flags false) — gross זהה למקרה בלי הרכיב; net גדל בדיוק בסכום', () => {
+    it('רכיב עם כל ה-flags false (inline) — לא משנה gross, net, ואף בסיס', () => {
       const without = calculate({ ...catalogCase.input });
-      const withResearchDollar = calculate({
+      const withNetOnly = calculate({
         ...catalogCase.input,
         personal: {
           ...catalogCase.input.personal,
-          earnings: [...catalogCase.input.personal.earnings, { id: 'researchDollar', amount: 300 }],
+          earnings: [...catalogCase.input.personal.earnings,
+            { id: 'fundDeposit', amount: 300, inTax: false, inNI: false, inPension: false, inTraining: false }],
         },
       });
-      assert.equal(withResearchDollar.gross, without.gross, 'רכיב נטו-בלבד לא אמור להיכנס ל-gross');
-      assert.ok(
-        Math.abs((withResearchDollar.net - without.net) - 300) < 0.01,
-        `net צריך לעלות ב-300 בדיוק (עלה ב-${withResearchDollar.net - without.net})`,
-      );
-      // בסיסים אחרים (פנסיה/קה"ש/מס/ב"ל) גם הם ללא שינוי — הרכיב לא נכנס לאף flag
-      assert.equal(withResearchDollar.pensionBase, without.pensionBase);
-      assert.equal(withResearchDollar.trainingFundBase, without.trainingFundBase);
-      assert.equal(withResearchDollar.niBase, without.niBase);
-      assert.equal(withResearchDollar.incomeTax, without.incomeTax);
+      assert.equal(withNetOnly.gross, without.gross, 'רכיב נטו-בלבד לא נכנס לברוטו');
+      assert.equal(withNetOnly.net, without.net, 'רכיב נטו-בלבד לא נכנס לנטו');
+      assert.equal(withNetOnly.pensionBase, without.pensionBase);
+      assert.equal(withNetOnly.trainingFundBase, without.trainingFundBase);
+      assert.equal(withNetOnly.niBase, without.niBase);
+      assert.equal(withNetOnly.incomeTax, without.incomeTax);
     });
 
     it('רכיב עם flag פעיל (phone, לא משפיע על תקרת קה"ש) עדיין נכנס ל-gross כרגיל (regression guard)', () => {

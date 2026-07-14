@@ -178,10 +178,9 @@ export function calculate({ national, personal, month, reductions = null, aidFun
     const earn    = earningsList.map(e => ({ ...e, _flags: resolveEarningFlags(e) }));
     const sumFlag = flag => earn.filter(e => e._flags[flag]).reduce((s, e) => s + (e.amount ?? 0), 0);
 
-    // רכיבים עם כל ה-flags כבויים (למשל researchDollar) הם "נטו-בלבד" — אינם חלק מהברוטו
-    // (לא חייבים מס/ב"ל/פנסיה/קה"ש); מתווספים ישירות לנטו אחרי הניכויים (excel-formulas.md §שיוך לבסיסים).
+    // רכיבים עם כל ה-flags כבויים ("נטו-בלבד") אינם חלק מהתלוש: לא בברוטו ולא בנטו.
+    // זהו כסף המנוהל בנפרד (למשל הפקדה חודשית לקרן הדולרית) — מודול הקרן הדולרית מטפל בו.
     const isNetOnly       = f => !f.inTax && !f.inNI && !f.inPension && !f.inTraining;
-    const netOnlyAmount   = earn.filter(e => isNetOnly(e._flags)).reduce((s, e) => s + (e.amount ?? 0), 0);
     const grossFromEarnings = earn.filter(e => !isNetOnly(e._flags)).reduce((s, e) => s + (e.amount ?? 0), 0);
     pensionBase      = sumFlag('inPension');
     trainingFundBase = sumFlag('inTraining');
@@ -222,7 +221,7 @@ export function calculate({ national, personal, month, reductions = null, aidFun
     nationalInsurance = calcBanded(niBase, national.nationalInsuranceBands);
     healthTax         = calcBanded(niBase, national.healthTaxBands);
 
-    net = gross - incomeTax - nationalInsurance - healthTax - pension - pension2 - trainingFund - otherDeductions - nonTaxableImputation + netOnlyAmount;
+    net = gross - incomeTax - nationalInsurance - healthTax - pension - pension2 - trainingFund - otherDeductions - nonTaxableImputation;
 
   } else {
     // =====================================================================

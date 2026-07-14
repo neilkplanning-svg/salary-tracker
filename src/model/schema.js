@@ -113,10 +113,13 @@ function fillMissing(target, source) {
  * @param {object} doc
  * @returns {object} doc (אותו אובייקט, מעודכן in-place)
  */
+// ids שהוסרו מהקטלוג הקנוני וצריך לנקות ממסמכים ישנים:
+//  'seniority' (WP10.13, "ותק" הוסר) · 'researchDollar' (2026-07: כסף דולרי מנוהל בקרן הדולרית, לא בתלוש)
+const REMOVED_EARNING_IDS = new Set(['seniority', 'researchDollar']);
 function removeOrphanedEarnings(doc) {
   const earnings = doc?.settings?.personal?.earnings;
   if (Array.isArray(earnings)) {
-    doc.settings.personal.earnings = earnings.filter(e => e?.id !== 'seniority');
+    doc.settings.personal.earnings = earnings.filter(e => !REMOVED_EARNING_IDS.has(e?.id));
   }
   return doc;
 }
