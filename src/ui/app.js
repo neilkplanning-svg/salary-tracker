@@ -7,6 +7,7 @@
 import { store, subscribe } from '../model/store.js';
 import { loadFromStorage } from '../storage/persistence.js';
 import { STRINGS, escapeHtml } from './strings.he.js';
+import { openFile as syncOpenFile, saveFile as syncSaveFile, getSyncStatus, initSync, isFSASupported } from '../sync/filesync.js';
 
 const SCREENS = ['attendance', 'estimate', 'actual', 'reductions', 'aidfund', 'dollarfund', 'history', 'settings'];
 
@@ -17,6 +18,7 @@ async function init() {
   applyTheme(store.getState().settings?.theme?.mode ?? 'system'); // החל מחדש אחרי טעינת מצב שמור
   setupNav();
   setupThemeToggle();
+  setupHeaderSync();
   route();
   window.addEventListener('hashchange', route);
   subscribe(onStateChange);
@@ -100,8 +102,50 @@ export function applyTheme(mode) {
   if (btn) btn.textContent = resolved === 'dark' ? '☀️' : '🌙';
 }
 
+// WP12.3 — כפתורי סנכרון OneDrive בכותרת (נגישים מכל מסך, לא רק מהגדרות)
+function setupHeaderSync() {
+  const openBtn = document.getElementById('header-sync-open');
+  const saveBtn = document.getElementById('header-sync-save');
+  if (!openBtn || !saveBtn) return;
+  openBtn.addEventListener('click', async () => {
+    await syncOpenFile();
+    renderHeaderSyncStatus();
+  });
+  saveBtn.addEventListener('click', async () => {
+    await syncSaveFile();
+    renderHeaderSyncStatus();
+  });
+  renderHeaderSyncStatus();
+  initSync().then(renderHeaderSyncStatus); // משחזר handle משסשן קודם, ללא בקשת הרשאה חדשה
+}
+
+/** מעדכן את חיווי הסנכרון הקומפקטי בכותרת (לצד כרטיס הסנכרון המלא במסך הגדרות) */
+function renderHeaderSyncStatus() {
+  const el = document.getElementById('header-sync-status');
+  if (!el) return;
+  const IO = STRINGS.io;
+  if (!isFSASupported()) {
+    el.textContent = '';
+    el.title = IO.errorNoFSA;
+    return;
+  }
+  const st = getSyncStatus();
+  if (st.connected) {
+    const t = st.lastSaved ? new Date(st.lastSaved).toLocaleTimeString('he-IL') : '';
+    el.textContent = t ? `✓ ${t}` : '✓';
+    el.title = `${IO.syncConnected}: ${st.fileName ?? ''}`;
+  } else if (st.needsPermission && st.fileName) {
+    el.textContent = '⚠';
+    el.title = `${st.fileName} — ${IO.syncNeedsPermission}`;
+  } else {
+    el.textContent = '';
+    el.title = IO.syncNotConnected;
+  }
+}
+
 function onStateChange() {
   route();
+  renderHeaderSyncStatus();
 }
 
 init();

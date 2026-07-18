@@ -14,7 +14,16 @@
   <div id="app">
     <header class="app-header">
       <h1>מעקב שכר</h1>
-      <button id="theme-toggle" aria-label="החלף ערכת נושא">🌙</button>
+      <div class="header-actions">
+        <span id="header-sync-status" class="header-sync-status" role="status" aria-live="polite"></span>
+        <button id="header-sync-open" type="button" class="header-sync-btn" aria-label="פתח קובץ OneDrive" title="פתח קובץ OneDrive">
+          <span aria-hidden="true">📂</span><span class="header-sync-label">פתח</span>
+        </button>
+        <button id="header-sync-save" type="button" class="header-sync-btn" aria-label="שמור קובץ OneDrive" title="שמור קובץ OneDrive">
+          <span aria-hidden="true">💾</span><span class="header-sync-label">שמור</span>
+        </button>
+        <button id="theme-toggle" aria-label="החלף ערכת נושא">🌙</button>
+      </div>
     </header>
     <nav id="main-nav">
       <a href="#attendance">נוכחות</a>

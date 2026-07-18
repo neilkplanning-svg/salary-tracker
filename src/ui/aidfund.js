@@ -5,10 +5,17 @@
  *
  * מודל (state.aidFund):
  *   deposits: [{ id, date, amount, notes }]
- *   balanceSavings: number   — יתרה ידנית
+ *   balanceSavings: number   — WP12.6: נגזרת, לא ידנית עוד. מחושבת ב-_computeBalance()
+ *     כ-Σ deposits.amount − Σ loans.amount ומוצגת read-only (אין יותר קלט/כפתור עריכה).
+ *     השדה עצמו עדיין נשמר במסמך ומתעדכן אוטומטית (_syncBalance) בכל הוספה/מחיקה של
+ *     הפקדה/הלוואה — אך ורק לתאימות-לאחור עם excel-io.js שממשיך לקרוא/לכתוב אותו; ה-UI
+ *     כאן תמיד מציג את הערך הטרי המחושב בזמן render(), לא את מה שנשמר במסמך.
  *   loans:    [{ id, date, amount, monthlyRepayment, notes, startMonth?, endMonth? }]
  *     — startMonth/endMonth (WP10.11, 'YYYY-MM', אופציונליים): טווח החודשים שבו ההחזר פעיל.
  *       חסר = פתוח-קצה (תמיד פעיל, תואם התנהגות ישנה — loans ללא תאריכים ממשיכים לפעול בכל חודש).
+ *     — amount (סכום ההלוואה שנמשך מהקרן) מופחת מהיתרה המחושבת בעת ההענקה; המודל אינו עוקב
+ *       אחר החזרים שכבר בוצעו בפועל לקרן עצמה (monthlyRepayment משפיע רק על הנטו החודשי,
+ *       ראו למטה) — כשהלוואה נפרעת במלואה, מחיקתה מהרשימה (✕) משיבה את סכומה ליתרה.
  *
  * ההחזר הכולל לחודש מסוים (Σ loans[].monthlyRepayment עבור הלוואות פעילות ב-monthId, ראו
  * isActiveInMonth ב-engine.js) → engine כ-aidFundRepayment
@@ -40,6 +47,28 @@ function _totalRepayment(af) {
 }
 
 /**
+ * יתרת קרן העזרה — נגזרת (WP12.6), לא שדה ידני: Σ deposits.amount − Σ loans.amount.
+ * @param {object} af state.aidFund
+ * @returns {number}
+ */
+function _computeBalance(af) {
+  const deposited = (af?.deposits ?? []).reduce((s, d) => s + (d.amount ?? 0), 0);
+  const borrowed  = (af?.loans ?? []).reduce((s, l) => s + (l.amount ?? 0), 0);
+  return deposited - borrowed;
+}
+
+/**
+ * מסנכרן את draft.aidFund.balanceSavings (השדה הנשמר) עם הערך הנגזר — נקרא אחרי כל שינוי
+ * בהפקדות/הלוואות כדי לשמור על תאימות-לאחור עם excel-io.js (שעדיין קורא/כותב שדה זה בייצוא/
+ * ייבוא). ה-UI כאן לא קורא את השדה הזה לתצוגה כלל (ראו render/_computeBalance) — רק שומר
+ * אותו מעודכן במסמך.
+ * @param {object} draft — draft.aidFund חייב להיות קיים
+ */
+function _syncBalance(draft) {
+  draft.aidFund.balanceSavings = _computeBalance(draft.aidFund);
+}
+
+/**
  * סה"כ החזר חודשי להלוואות הפעילות בחודש נתון בלבד (WP10.11 — טווח startMonth/endMonth).
  * @param {object} af state.aidFund
  * @param {string} monthId 'YYYY-MM'
@@ -66,6 +95,7 @@ export function render(container, state) {
   const af             = state.aidFund ?? { deposits: [], balanceSavings: 0, loans: [] };
   const deposits       = af.deposits  ?? [];
   const loans          = af.loans     ?? [];
+  const balance        = _computeBalance(af);
   const totalDeposited = deposits.reduce((s, d) => s + (d.amount ?? 0), 0);
   const totalRepayment = _totalRepayment(af);
 
@@ -90,7 +120,7 @@ export function render(container, state) {
 
   container.innerHTML = `
     <div class="aid-screen">
-      ${_summaryHTML(af, totalDeposited, totalRepayment)}
+      ${_summaryHTML(balance, totalDeposited, totalRepayment)}
       ${_depositsHTML(deposits)}
       ${_loansHTML(loans)}
       ${_impactHTML(impactResult, activeRepaymentThisMonth)}
@@ -101,20 +131,15 @@ export function render(container, state) {
 
 // ─── HTML builders ────────────────────────────────────────────────────────
 
-/** כרטיס סיכום: יתרה (נערכת), סה"כ הופקד, החזר חודשי */
-function _summaryHTML(af, totalDeposited, totalRepayment) {
-  const bal = af.balanceSavings ?? 0;
+/** כרטיס סיכום: יתרה (מחושבת אוטומטית — WP12.6), סה"כ הופקד, החזר חודשי */
+function _summaryHTML(balance, totalDeposited, totalRepayment) {
   return `
     <div class="card">
       <h3>${STRINGS.aidFund.title}</h3>
       <div class="aid-summary-grid">
         <div class="aid-sum-item">
-          <span class="aid-sum-lbl">${STRINGS.aidFund.balance}</span>
-          <div class="aid-balance-edit">
-            <input id="aid-balance" type="number" min="0" step="0.01"
-                   class="aid-bal-input" value="${bal}" placeholder="0">
-            <button id="aid-save-balance" class="btn-sec aid-bal-btn">שמור יתרה</button>
-          </div>
+          <span class="aid-sum-lbl">${STRINGS.aidFund.balance} (מחושבת)</span>
+          <strong class="aid-sum-val ${balance < 0 ? 'aid-neg' : ''}">${formatCurrency(balance)}</strong>
         </div>
         <div class="aid-sum-item">
           <span class="aid-sum-lbl">סה"כ הופקד</span>
@@ -287,15 +312,7 @@ function _impactHTML(result, totalRepayment) {
 // ─── Event bindings ───────────────────────────────────────────────────────
 
 function _bind(container) {
-  // שמירת יתרת חיסכון ידנית
-  container.querySelector('#aid-save-balance')?.addEventListener('click', () => {
-    const raw = container.querySelector('#aid-balance')?.value;
-    const val = parseFloat(raw);
-    store.setState(draft => {
-      draft.aidFund.balanceSavings = isNaN(val) ? 0 : Math.max(0, val);
-    });
-    _toast('יתרת חיסכון עודכנה ✓');
-  });
+  // WP12.6: היתרה נגזרת אוטומטית מההפקדות/הלוואות — אין יותר קלט/כפתור לעדכון ידני.
 
   // הוספת הפקדה
   container.querySelector('#aid-dep-form')?.addEventListener('submit', e => {
