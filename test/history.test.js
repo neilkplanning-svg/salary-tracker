@@ -53,17 +53,17 @@ test('computeYearSummaries — נפילה per-field: actual.net קיים, actual
   assert.equal(summary.totalNet, 8300);    // מ-actual
 });
 
-test('computeYearSummaries — מענק רבעוני נספר מ-month.reductions.quarterlyBonus, לא מ-state.temporaryReductions', () => {
+test('computeYearSummaries — מענקים מ-actual.bonuses בלבד (WP12.5: reductions.quarterlyBonus הוסר)', () => {
   const doc = structuredClone(EMPTY_STATE);
   doc.months.push(monthDoc('2026-01', {
     estimate: { gross: 10000, net: 8000 },
+    actual: { gross: 10000, net: 8000, bonuses: 1200 },
+    // reductions.quarterlyBonus כבר לא נספר (הטופס הוסר) — נוודא שהוא מתעלם
     reductions: { fromRegular: 0, fromOvertime: 0, quarterlyBonus: 1500, bonusDeduction: 0 },
   }));
-  // state.temporaryReductions לא נכתב אליו אף פעם באפליקציה — מוודאים שהוא לא נקרא יותר
-  doc.temporaryReductions = [{ monthId: '2026-01', quarterlyBonus: 9999 }];
 
   const [summary] = computeYearSummaries(doc);
-  assert.equal(summary.bonusesGross, 1500);
+  assert.equal(summary.bonusesGross, 1200); // רק actual.bonuses, לא ה-1500 של quarterlyBonus
 });
 
 // WP10.6 — manualYearSummaries: שנים היסטוריות ללא חודשים מתועדים, הזנה חלקית, derived גובר

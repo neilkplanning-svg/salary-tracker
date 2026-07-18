@@ -85,7 +85,7 @@ export function render(container, state) {
       national:          state.settings.national,
       personal:          state.settings.personal,
       month:             stored,
-      reductions:        stored.reductions ?? null,
+      reductions:        null, // WP12.5: הפחתות שכר זמניות הוסרו
       aidFundRepayment:  aidFundRepayment,
       customDeductions:  customDeductionsTotal,
     });
@@ -106,7 +106,7 @@ export function render(container, state) {
       ${_navHTML(monthId, y, m)}
       ${_hoursHTML(sumReg, sumOT, sumZero, sumUnap, cap, attParams != null)}
       ${_shortfallHTML(result)}
-      ${_breakdownHTML(result, state.settings.personal, stored.reductions, aidFundRepayment, customDeductionsList.filter(cd => isActiveInMonth(cd, monthId)))}
+      ${_breakdownHTML(result, state.settings.personal, aidFundRepayment, customDeductionsList.filter(cd => isActiveInMonth(cd, monthId)))}
       ${_snapshotHTML(snapshot, stale)}
     </div>`;
 
@@ -298,30 +298,21 @@ function _grossDetailsRow(r, personal) {
  * שורות התאמה בין "נטו" ל"נטו לאחר הפחתות" (WP10.4 חלק ב') — מציגות כל רכיב שאינו אפס
  * כדי שהשורות יתאזנו בדיוק בין net ל-netAfterReductions (אותה נוסחה כמו engine.js).
  * @param {object} r תוצאת calculate()
- * @param {object|null} reductions stored.reductions
  * @param {number} aidFundRepayment סכום החזר קרן עזרה חודשי ששימש בחישוב
  * @param {Array<{label:string, amount:number}>} [activeCustomDeductions] ניכויים קבועים פעילים לחודש (WP10.11)
  */
-function _reductionItemRows(r, reductions, aidFundRepayment, activeCustomDeductions = []) {
-  const fromReg   = reductions?.fromRegular    ?? 0;
-  const fromOT    = reductions?.fromOvertime   ?? 0;
-  const quarterly = reductions?.quarterlyBonus ?? 0;
-  const bonusDed  = reductions?.bonusDeduction ?? 0;
-  const aidFund   = aidFundRepayment ?? 0;
-
+function _reductionItemRows(r, aidFundRepayment, activeCustomDeductions = []) {
+  const aidFund = aidFundRepayment ?? 0;
   let html = '';
-  if (fromReg  !== 0) html += _row(STRINGS.reductions.fromRegular,    -fromReg,   'est-red-item-row');
-  if (fromOT   !== 0) html += _row(STRINGS.reductions.fromOvertime,   -fromOT,    'est-red-item-row');
-  if (quarterly !== 0) html += _row(STRINGS.reductions.quarterlyBonus, quarterly, 'est-red-item-row');
-  if (bonusDed !== 0) html += _row(STRINGS.reductions.bonusDeduction,  -bonusDed,  'est-red-item-row');
-  if (aidFund  !== 0) html += _row(STRINGS.estimate.aidFundRepayment,  -aidFund,   'est-red-item-row');
+  // WP12.5: הפחתות שכר זמניות (month.reductions) הוסרו — נותרו קרן עזרה + ניכויים קבועים.
+  if (aidFund !== 0) html += _row(STRINGS.estimate.aidFundRepayment, -aidFund, 'est-red-item-row');
   for (const cd of activeCustomDeductions) {
     if ((cd.amount ?? 0) !== 0) html += _row(cd.label, -cd.amount, 'est-red-item-row');
   }
   return html;
 }
 
-function _breakdownHTML(r, personal, reductions, aidFundRepayment, activeCustomDeductions = []) {
+function _breakdownHTML(r, personal, aidFundRepayment, activeCustomDeductions = []) {
   let html = '';
 
   // ── ברוטו ──
@@ -349,7 +340,7 @@ function _breakdownHTML(r, personal, reductions, aidFundRepayment, activeCustomD
   html += _sep();
   html += _netRow(STRINGS.estimate.net, r.net);
   if (Math.abs(r.netAfterReductions - r.net) > 0.01) {
-    html += _reductionItemRows(r, reductions, aidFundRepayment, activeCustomDeductions);
+    html += _reductionItemRows(r, aidFundRepayment, activeCustomDeductions);
     html += _netRow(STRINGS.estimate.netAfterRed, r.netAfterReductions);
     html += `
       <tr class="est-subrow">

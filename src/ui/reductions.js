@@ -1,12 +1,10 @@
 /**
- * reductions.js — מסך הפחתות שכר זמני
- * Input: state (months[], settings, customDeductions[])  Output: DOM מסך הפחתות
+ * reductions.js — מסך ניכויים קבועים + קרן עזרה (השפעה על נטו)
+ * Input: state (months[], settings, customDeductions[])  Output: DOM המסך
  * Deps: store.js, engine.js, strings.he.js
  *
- * מודל: month.reductions = { fromRegular, fromOvertime, quarterlyBonus, bonusDeduction }
- * המנוע מחשב: netAfterReductions = net − fromRegular − fromOvertime + quarterlyBonus
- *             − bonusDeduction − aidFundRepayment − customDeductions
- * ראו PRD §5.3 שלב 11 ו-engine.js.
+ * WP12.5: טופס "הפחתות שכר זמניות" (month.reductions) הוסר — המנוע כבר לא מקבל reductions.
+ * netAfterReductions = net − aidFundRepayment − customDeductions.
  *
  * WP10.11: state.customDeductions[] — ניכויים קבועים מותאמים-אישית (חברות בוועד/הלוואה וכו'),
  * כל איבר { id, label, amount, startMonth?, endMonth? }. הסינון לפי טווח החודש נעשה כאן ב-UI
@@ -48,9 +46,8 @@ export function render(container, state) {
   const monthId = _viewMonthId;
   const [y, m]  = monthId.split('-').map(Number);
   const stored  = state.months.find(mo => mo.id === monthId) ?? { id: monthId, days: [] };
-  const red     = stored.reductions ?? {};
 
-  // חישוב חי כולל הפחתות וקרן עזרה — להצגת ההשפעה על netAfterReductions
+  // חישוב חי כולל קרן עזרה וניכויים קבועים — להצגת ההשפעה על netAfterReductions
   // WP10.11: הלוואות/ניכויים קבועים מסוננים לפי טווח startMonth/endMonth של החודש המוצג
   const aidFundRepayment = (state.aidFund?.loans ?? [])
     .filter(l => isActiveInMonth(l, monthId))
@@ -65,7 +62,7 @@ export function render(container, state) {
       national:          state.settings.national,
       personal:          state.settings.personal,
       month:             stored,
-      reductions:        stored.reductions ?? null,
+      reductions:        null, // WP12.5: הפחתות שכר זמניות הוסרו; לא מוחלות עוד
       aidFundRepayment:  aidFundRepayment,
       customDeductions:  customDeductionsTotal,
     });
@@ -74,8 +71,7 @@ export function render(container, state) {
   container.innerHTML = `
     <div class="red-screen">
       ${_navHTML(monthId, y, m)}
-      ${_formHTML(red)}
-      ${_impactHTML(result, red, aidFundRepayment, activeCustomDeductions)}
+      ${_impactHTML(result, aidFundRepayment, activeCustomDeductions)}
       ${_customDeductionsHTML(state.customDeductions ?? [])}
     </div>`;
 
@@ -94,59 +90,12 @@ function _navHTML(monthId, y, m) {
 }
 
 /**
- * טופס הזנת הפחתות/מענקים
- * @param {object} red — reductions שמורות (עשוי להיות ריק {})
- */
-function _formHTML(red) {
-  const v = key => (red[key] != null && red[key] !== 0) ? red[key] : '';
-  return `
-    <div class="card">
-      <h3>${STRINGS.reductions.title}</h3>
-      <form id="red-form" class="red-form" novalidate>
-        ${_field('red-from-regular',    STRINGS.reductions.fromRegular,    v('fromRegular'),    false)}
-        ${_field('red-from-overtime',   STRINGS.reductions.fromOvertime,   v('fromOvertime'),   false)}
-        ${_field('red-quarterly-bonus', STRINGS.reductions.quarterlyBonus, v('quarterlyBonus'), true)}
-        ${_field('red-bonus-deduction', STRINGS.reductions.bonusDeduction, v('bonusDeduction'), false)}
-        <div class="red-actions">
-          <button type="submit" class="btn-primary">שמור</button>
-          <button type="button" id="red-clear" class="btn-sec">נקה</button>
-        </div>
-      </form>
-    </div>`;
-}
-
-/**
- * שורת שדה בטופס ההפחתות
- * @param {string}  id        — id של ה-input
- * @param {string}  label     — תווית
- * @param {number|string} val — ערך נוכחי
- * @param {boolean} isAddition — true=תוספת (ירוק ▲), false=ניכוי (אדום ▼)
- */
-function _field(id, label, val, isAddition) {
-  const signCls  = isAddition ? 'red-sign-add' : 'red-sign-sub';
-  const signText = isAddition ? '▲ תוספת' : '▼ ניכוי';
-  return `
-    <div class="red-field">
-      <label class="red-lbl" for="${id}">
-        ${label}
-        <small class="red-sign ${signCls}">${signText}</small>
-      </label>
-      <div class="red-input-wrap">
-        <input id="${id}" type="number" min="0" step="0.01"
-               class="red-input" value="${val}" placeholder="0">
-        <span class="red-unit">₪</span>
-      </div>
-    </div>`;
-}
-
-/**
- * כרטיס השפעה: נטו לפני ואחרי הפחתות
- * @param {object|null} result — תוצאת calculate() עם reductions
- * @param {object}      red    — reductions שמורות
- * @param {number}      aidFundRepayment — החזר קרן עזרה חודשי ששימש בחישוב (WP10.4 חלק ג')
+ * כרטיס השפעה: נטו לפני ואחרי ניכויים (קרן עזרה + ניכויים קבועים)
+ * @param {object|null} result — תוצאת calculate()
+ * @param {number}      aidFundRepayment — החזר קרן עזרה חודשי ששימש בחישוב
  * @param {Array<{label:string, amount:number}>} [activeCustomDeductions] ניכויים קבועים פעילים לחודש (WP10.11)
  */
-function _impactHTML(result, red, aidFundRepayment = 0, activeCustomDeductions = []) {
+function _impactHTML(result, aidFundRepayment = 0, activeCustomDeductions = []) {
   if (!result) {
     return `
       <div class="card">
@@ -155,15 +104,9 @@ function _impactHTML(result, red, aidFundRepayment = 0, activeCustomDeductions =
       </div>`;
   }
 
-  const fromReg  = red.fromRegular    ?? 0;
-  const fromOT   = red.fromOvertime   ?? 0;
-  const quarterly = red.quarterlyBonus ?? 0;
-  const bonusDed = red.bonusDeduction  ?? 0;
   const aidFund  = aidFundRepayment    ?? 0;
   const customTotal = activeCustomDeductions.reduce((s, cd) => s + (cd.amount ?? 0), 0);
-  // WP10.4 חלק ג': ההלוואה מקרן עזרה משפיעה על netAfterReductions גם ללא הפחתה ידנית —
-  // "יש מה להציג" כולל אותה, כדי שהשורה תופיע ושהשורות יתאזנו ל-total. WP10.11: כנ"ל לניכויים קבועים.
-  const hasAny   = fromReg > 0 || fromOT > 0 || quarterly > 0 || bonusDed > 0 || aidFund > 0 || customTotal > 0;
+  const hasAny   = aidFund > 0 || customTotal > 0;
 
   let rows = `
     <tr class="red-impact-row">
@@ -172,10 +115,6 @@ function _impactHTML(result, red, aidFundRepayment = 0, activeCustomDeductions =
     </tr>`;
 
   if (hasAny) {
-    if (fromReg  > 0) rows += _adjustRow(STRINGS.reductions.fromRegular,    -fromReg);
-    if (fromOT   > 0) rows += _adjustRow(STRINGS.reductions.fromOvertime,   -fromOT);
-    if (quarterly > 0) rows += _adjustRow(STRINGS.reductions.quarterlyBonus, quarterly);
-    if (bonusDed > 0) rows += _adjustRow(STRINGS.reductions.bonusDeduction,  -bonusDed);
     if (aidFund  > 0) rows += _adjustRow(STRINGS.estimate.aidFundRepayment,  -aidFund);
     for (const cd of activeCustomDeductions) {
       if ((cd.amount ?? 0) > 0) rows += _adjustRow(cd.label, -cd.amount);
@@ -189,7 +128,7 @@ function _impactHTML(result, red, aidFundRepayment = 0, activeCustomDeductions =
     rows += `
     <tr class="red-impact-row">
       <td colspan="2" class="red-impact-lbl hint" style="padding-top:0.5rem">
-        הזן ערכים בטופס ולחץ <strong>שמור</strong> להצגת ההשפעה.
+        הוסף ניכוי קבוע או הלוואת קרן עזרה כדי לראות את ההשפעה.
       </td>
     </tr>`;
   }
@@ -297,50 +236,7 @@ function _bind(container, monthId) {
     render(container, store.getState());
   });
 
-  // שמירת טופס
-  container.querySelector('#red-form').addEventListener('submit', e => {
-    e.preventDefault();
-    const parse = id => {
-      const raw = container.querySelector(`#${id}`)?.value?.trim();
-      if (!raw) return 0;
-      const n = parseFloat(raw);
-      return isNaN(n) ? 0 : Math.max(0, n);
-    };
-
-    const updated = {
-      fromRegular:    parse('red-from-regular'),
-      fromOvertime:   parse('red-from-overtime'),
-      quarterlyBonus: parse('red-quarterly-bonus'),
-      bonusDeduction: parse('red-bonus-deduction'),
-    };
-
-    store.setState(draft => {
-      let mo = draft.months.find(m => m.id === monthId);
-      if (!mo) {
-        mo = { id: monthId, days: [], estimate: null, actual: null };
-        draft.months.push(mo);
-        draft.months.sort((a, b) => a.id.localeCompare(b.id));
-      }
-      mo.reductions = updated;
-    });
-
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.setAttribute('role', 'status');
-    toast.setAttribute('aria-live', 'polite');
-    toast.textContent = 'הפחתות נשמרו ✓';
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2500);
-  });
-
-  // ניקוי הפחתות לחודש
-  container.querySelector('#red-clear').addEventListener('click', () => {
-    if (!confirm('למחוק את ההפחתות/מענקים לחודש זה?')) return;
-    store.setState(draft => {
-      const mo = draft.months.find(m => m.id === monthId);
-      if (mo) mo.reductions = null;
-    });
-  });
+  // WP12.5: טופס ההפחתות הזמניות הוסר — נותרו ניווט חודש + ניכויים קבועים בלבד.
 
   // הוספת ניכוי קבוע מותאם-אישית (WP10.11)
   container.querySelector('#cd-add-form')?.addEventListener('submit', e => {

@@ -92,7 +92,7 @@ function _computeDerivedYear(year, months, prevYearSummary, inflationPct) {
     totalGross += g;
     totalNet += n;
     bonusesGross += m.actual?.bonuses || 0;
-    bonusesGross += (m.reductions?.quarterlyBonus || 0);
+    // WP12.5: מענק רבעוני (month.reductions.quarterlyBonus) הוסר — המענקים מגיעים מ-actual.bonuses בלבד.
 
     // WP10.7: תוספות קבועות — נקרא רק מ-estimate.paramsSnapshot השמור (כלל #6, אין חישוב מחדש)
     additionsGross += _monthAdditionsFromSnapshot(m.estimate);

@@ -33,7 +33,7 @@ export const EMPTY_STATE = {
       pensionBaseFactor: 0.9895, // בסיס פנסיה = ברוטו × גורם זה — excel-formulas.md §9
 
       creditPointsQty: 2.25,
-      pensionRateEmployee: 0.06,
+      pensionRateEmployee: 0.07, // 7% — מאומת מהתלוש (excel-formulas.md §9); היה 0.06 בטעות
       // פנסיה שנייה על נלווים (OI-07) — קרן/ביטוח נוסף על "ברוטו מבוטח נלווה" (למשל כוננות/ש"נ),
       // בנפרד מבסיס הפנסיה העיקרי. ancillaryPensionBase=0 → pension2=0 (אין השפעה כברירת מחדל).
       pensionRateEmployee2: 0.07,
