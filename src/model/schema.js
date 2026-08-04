@@ -78,6 +78,11 @@ export const EMPTY_STATE = {
   customDeductions: [],
   // אינפלציה שנתית מוזנת ידנית במסך היסטוריה; yearSummaries עצמו נגזר בזמן render (history.js), לא נשמר.
   inflationByYear: {},
+  // WP13.3: אחוז משרה ממוצע לשנה (100 = משרה מלאה), מוזן ידנית במסך היסטוריה — באותה תבנית
+  // כמו inflationByYear. נדרש כי אחוז המשרה בפועל נגזר מ-שעות-בפועל ÷ שעות-משרה-מלאה, ונתוני
+  // הנוכחות קיימים רק לחודשים שתועדו באפליקציה; לשנים היסטוריות אין מהיכן לחשב אותו.
+  // computeYearSummaries מעדיף תמיד את הערך מ-estimate.paramsSnapshot כשהוא קיים.
+  positionPctByYear: {},
   // WP10.6: סיכומי שנה ידניים לשנים ללא חודשים מתועדים (למשל שנים לפני תחילת השימוש באפליקציה).
   // מפתח = 'YYYY'; כל שדה אופציונלי (הזנה חלקית) — ראו computeYearSummaries ב-history.js למיזוג
   // עם שנים נגזרות מ-months[] (derived תמיד גובר; שנה עם months אינה נדרסת ע"י manual).
@@ -248,6 +253,19 @@ export function validate(doc) {
           errors.push(`customDeductions: startMonth לא תקין (${cd.startMonth})`);
         if (cd?.endMonth != null && !monthRe.test(cd.endMonth))
           errors.push(`customDeductions: endMonth לא תקין (${cd.endMonth})`);
+      }
+    }
+  }
+
+  // ולידציית positionPctByYear (WP13.3) — מפתח 'YYYY', ערך אחוז משרה אי-שלילי (100 = משרה מלאה)
+  if (doc.positionPctByYear != null) {
+    if (!isPlainObject(doc.positionPctByYear)) {
+      errors.push('positionPctByYear חייב להיות אובייקט');
+    } else {
+      for (const [key, v] of Object.entries(doc.positionPctByYear)) {
+        if (!/^\d{4}$/.test(key)) errors.push(`positionPctByYear: מפתח שנה לא תקין (${key})`);
+        if (typeof v !== 'number' || v < 0)
+          errors.push(`positionPctByYear[${key}] חייב להיות מספר אי-שלילי`);
       }
     }
   }

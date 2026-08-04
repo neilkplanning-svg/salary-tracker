@@ -207,3 +207,102 @@ test('computeYearSummaries — additionsGross הוא undefined (ריק) לשנה
   assert.equal(summary.additionsGross, undefined);
   assert.equal(summary.bonusesGross, 5000); // בונוסים ידניים — כרגיל, לא חסום
 });
+
+// ─── WP13.3 — אחוז משרה, מענקים (ממוצע + שינוי), ושנה ראשונה ללא "0%" מטעה ───
+
+test('WP13.3 — avgPositionPct מ-snapshot מחושב רק על חודשים שיש בהם ערך (לא משלים 100 לחודש חסר)', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  const withPos = pct => ({
+    gross: 10000, net: 8000,
+    paramsSnapshot: { national: {}, personal: { positionPercent: pct } },
+  });
+  doc.months.push(monthDoc('2026-01', { estimate: withPos(120) }));
+  doc.months.push(monthDoc('2026-02', { estimate: withPos(80) }));
+  doc.months.push(monthDoc('2026-03', { estimate: { gross: 10000, net: 8000 } })); // ללא snapshot
+
+  const [summary] = computeYearSummaries(doc);
+  // ממוצע על שני החודשים בלבד: (120+80)/2 = 100. הקוד הישן היה מחשב (120+80+100)/3 = 100 במקרה,
+  // אבל (120+80+100)/3 שונה מ-(120+80)/2 בכל מקרה שאינו סימטרי — ראו הבדיקה הבאה.
+  assert.equal(summary.avgPositionPct, 100);
+  assert.equal(summary.positionSource, 'snapshot');
+});
+
+test('WP13.3 — חודש ללא snapshot אינו נספר כ-100% (הטיה שתוקנה)', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.months.push(monthDoc('2026-01', {
+    estimate: { gross: 10000, net: 8000, paramsSnapshot: { national: {}, personal: { positionPercent: 50 } } },
+  }));
+  doc.months.push(monthDoc('2026-02', { estimate: { gross: 10000, net: 8000 } }));
+
+  const [summary] = computeYearSummaries(doc);
+  assert.equal(summary.avgPositionPct, 50); // ולא (50+100)/2 = 75
+});
+
+test('WP13.3 — avgPositionPct נופל ל-positionPctByYear כשאין ולו snapshot אחד, ומסומן source:"manual"', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.months.push(monthDoc('2019-01', { actual: { gross: 10000, net: 8000 } }));
+  doc.positionPctByYear = { '2019': 111.37 };
+
+  const [summary] = computeYearSummaries(doc);
+  assert.equal(summary.avgPositionPct, 111.37);
+  assert.equal(summary.positionSource, 'manual');
+});
+
+test('WP13.3 — snapshot גובר על positionPctByYear כששניהם קיימים', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.months.push(monthDoc('2026-01', {
+    estimate: { gross: 10000, net: 8000, paramsSnapshot: { national: {}, personal: { positionPercent: 90 } } },
+  }));
+  doc.positionPctByYear = { '2026': 111.37 };
+
+  const [summary] = computeYearSummaries(doc);
+  assert.equal(summary.avgPositionPct, 90);
+  assert.equal(summary.positionSource, 'snapshot');
+});
+
+test('WP13.3 — avgPositionPct הוא undefined (—) כשאין לא snapshot ולא ערך שנתי', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.months.push(monthDoc('2019-01', { actual: { gross: 10000, net: 8000 } }));
+
+  const [summary] = computeYearSummaries(doc);
+  assert.equal(summary.avgPositionPct, undefined);
+  assert.equal(summary.positionSource, null);
+});
+
+test('WP13.3 — avgMonthlyBonuses מחלק במספר החודשים המתועדים', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.months.push(monthDoc('2026-01', { actual: { gross: 10000, net: 8000, bonuses: 1200 } }));
+  doc.months.push(monthDoc('2026-02', { actual: { gross: 10000, net: 8000, bonuses: 0 } }));
+
+  const [summary] = computeYearSummaries(doc);
+  assert.equal(summary.bonusesGross, 1200);
+  assert.equal(summary.avgMonthlyBonuses, 600); // 1200 / 2 חודשים, לא / 12
+});
+
+test('WP13.3 — bonusesChangePct מול השנה הקודמת', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.months.push(monthDoc('2025-01', { actual: { gross: 10000, net: 8000, bonuses: 2000 } }));
+  doc.months.push(monthDoc('2026-01', { actual: { gross: 10000, net: 8000, bonuses: 3000 } }));
+
+  const summaries = computeYearSummaries(doc);
+  assert.equal(summaries[0].bonusesChangePct, undefined); // שנה ראשונה — אין בסיס
+  assert.equal(Math.round(summaries[1].bonusesChangePct * 100), 50); // 2000 → 3000 = +50%
+});
+
+test('WP13.3 — bonusesChangePct הוא undefined כשלשנה הקודמת אין מענקים כלל (אין חלוקה ב-0)', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.months.push(monthDoc('2025-01', { actual: { gross: 10000, net: 8000, bonuses: 0 } }));
+  doc.months.push(monthDoc('2026-01', { actual: { gross: 10000, net: 8000, bonuses: 3000 } }));
+
+  const summaries = computeYearSummaries(doc);
+  assert.equal(summaries[1].bonusesChangePct, undefined); // ולא Infinity ולא 0
+});
+
+test('WP13.3 — שנה ראשונה: incomeChangePct/netChangePct הם undefined ולא 0 (לא להציג "0%" מטעה)', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.months.push(monthDoc('2026-01', { actual: { gross: 10000, net: 8000 } }));
+
+  const [summary] = computeYearSummaries(doc);
+  assert.equal(summary.incomeChangePct, undefined);
+  assert.equal(summary.netChangePct, undefined);
+});

@@ -1098,17 +1098,34 @@ input:disabled {
 /* גרפי SVG בהיסטוריה — לעולם לא לחרוג מרוחב המכל */
 #screen-container svg { max-width: 100%; }
 
-/* WP12.1: גרפי היסטוריה — קנבס גדול ורספונסיבי במקום גובה קבוע בפיקסלים.
-   history.js קובע height:250px inline על מכלי הגרפים; דורסים כאן ב-!important
-   עם aspect-ratio זהה ליחס ה-viewBox של charts.js (480x320 = 3:2), כך שה-SVG
-   תמיד ממלא את מלוא רוחב הכרטיס בלי "letterboxing" ובלי לגלוש אופקית, וגדל/קטן
-   באופן רציף עם רוחב המסך (דסקטופ ומובייל כאחד). */
+/* WP13.1: גרפי היסטוריה — ערימה אנכית, מכל ברוחב מלא.
+   קודם (WP12.1) שלושת הגרפים ישבו בשורת flex אחת ברוחב ~300-420px כל אחד; מול viewBox
+   של charts.js זה נתן קנה-מידה של פחות מחצי, ולכן הטקסט נראה זעיר. עכשיו כל גרף מקבל
+   את מלוא רוחב הכרטיס (עד max-width קריא), ו-aspect-ratio תואם ל-viewBox (900x420 = 15:7)
+   כדי שה-SVG ימלא את המכל בלי "letterboxing". */
+.chart-stack {
+  display: grid;
+  gap: 2rem;
+}
+.chart-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  max-width: 1000px;
+  width: 100%;
+  margin-inline: auto;
+}
+.chart-panel h4 {
+  text-align: center;
+  margin-bottom: 1rem;
+  color: var(--color-text-secondary);
+  font-size: 1.05rem;
+}
 #chart-annual,
 #chart-monthly,
 #chart-inflation {
-  height: auto !important;
-  aspect-ratio: 3 / 2;
-  min-height: 200px;
+  aspect-ratio: 15 / 7;
+  min-height: 300px;
   width: 100%;
   overflow: hidden;
 }
@@ -1118,6 +1135,18 @@ input:disabled {
   .app-header { padding: 0.6rem 0.9rem; }
   .app-header h1 { font-size: 1.05rem; }
   #screen-container { padding: 0.75rem; }
+
+  /* --- גרפים (WP13.1) --- */
+  /* 15:7 על מסך ברוחב ~350px נותן גרף בגובה ~160px — סרט שטוח שאי אפשר לקרוא.
+     יחס גבוה יותר במובייל שומר על גובה שמיש; ה-SVG מתאים את עצמו ל-viewBox ממילא. */
+  .chart-stack { gap: 1.25rem; }
+  .chart-panel { padding: 0.75rem; }
+  #chart-annual,
+  #chart-monthly,
+  #chart-inflation {
+    aspect-ratio: 4 / 3;
+    min-height: 260px;
+  }
 
   /* --- ניווט ראשי: רצועת טאבים בגלילה אופקית במקום גלישה לכמה שורות --- */
   #main-nav {

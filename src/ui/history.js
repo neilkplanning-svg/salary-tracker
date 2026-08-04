@@ -8,6 +8,8 @@ import { store } from '../model/store.js';
 import { STRINGS, formatCurrency } from './strings.he.js';
 import { renderChart } from './charts.js';
 import { EARNING_COMPONENTS } from '../engine/defaults.js';
+// ייבוא דינמי (lazy) — SheetJS נטען רק בלחיצה על "ייצוא ל-Excel", לא בכל render של המסך
+const loadExcelIO = () => import('../io/excel-io.js');
 
 const S = STRINGS.history;
 const toPct = v => +(Number(v || 0) * 100).toFixed(2);
@@ -34,6 +36,31 @@ function _optCurrency(v) {
 /** מציג אחוז אופציונלי — S.emptyField כשהשדה לא הוזן (אין מספיק נתונים לחישוב) */
 function _optPct(v) {
   return v == null ? S.emptyField : `${toPct(v)}%`;
+}
+
+/**
+ * כרטיס מדד רגיל.
+ * @param {string} label @param {string} value @param {boolean} [small] גופן מוקטן לערכים משניים
+ */
+function _statBox(label, value, small = true) {
+  return `<div class="stat-box">
+    <div class="stat-label">${label}</div>
+    <div class="stat-value"${small ? ' style="font-size:1.1rem"' : ''}>${value}</div>
+  </div>`;
+}
+
+/**
+ * כרטיס אחוז-שינוי: ירוק לעלייה, אדום לירידה, ו-"—" כשאין בסיס השוואה
+ * (שנה ראשונה, או שנה קודמת עם 0 מענקים) — WP13.3.
+ * @param {string} label @param {number|null|undefined} pct
+ */
+function _changeBox(label, pct) {
+  if (pct == null) return _statBox(label, S.emptyField);
+  const color = pct >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+  return `<div class="stat-box">
+    <div class="stat-label">${label}</div>
+    <div class="stat-value" style="font-size:1.1rem; color:${color}">${pct > 0 ? '+' : ''}${toPct(pct)}%</div>
+  </div>`;
 }
 
 /** מפה id→group מהקטלוג הקבוע, לסיווג "תוספות" (group !== 'base') — קטלוג בלבד, לא מנוע חישוב */
@@ -73,15 +100,18 @@ function _monthAdditionsFromSnapshot(estimate) {
  * @param {object[]} months חודשי השנה
  * @param {object|null} prevYearSummary סיכום השנה הקודמת (ל-incomeChangePct/netChangePct)
  * @param {number} inflationPct
+ * @param {number|undefined} storedPositionPct אחוז משרה שנתי שהוזן ידנית (WP13.3) — fallback
+ *   כשאין ולו חודש אחד עם positionPercent ב-estimate.paramsSnapshot
  * @returns {object} סיכום שנה עם source:'derived'
  */
-function _computeDerivedYear(year, months, prevYearSummary, inflationPct) {
+function _computeDerivedYear(year, months, prevYearSummary, inflationPct, storedPositionPct) {
   let totalGross = 0;
   let totalNet = 0;
   let bonusesGross = 0;
   let bonusesNet = 0;
   let additionsGross = 0;
   let totalPosition = 0;
+  let positionMonths = 0; // WP13.3 — רק חודשים עם snapshot; ראו הערה ב-avgPositionPct למטה
   let unpaidHours = 0;
 
   for (const m of months) {
@@ -97,7 +127,10 @@ function _computeDerivedYear(year, months, prevYearSummary, inflationPct) {
     // WP10.7: תוספות קבועות — נקרא רק מ-estimate.paramsSnapshot השמור (כלל #6, אין חישוב מחדש)
     additionsGross += _monthAdditionsFromSnapshot(m.estimate);
 
-    totalPosition += m.estimate?.paramsSnapshot?.personal?.positionPercent || 100;
+    // WP13.3: נספר רק כשיש ערך ב-snapshot. הקוד הקודם השלים 100 לכל חודש חסר (`|| 100`)
+    // והטה את הממוצע כלפי מעלה — חודש בלי "שמור תמונה" נראה כמשרה מלאה.
+    const pos = m.estimate?.paramsSnapshot?.personal?.positionPercent;
+    if (pos != null) { totalPosition += pos; positionMonths++; }
 
     for (const d of (m.days || [])) {
       unpaidHours += (d.zeroHours || 0) + (d.unapprovedHours || 0);
@@ -107,16 +140,23 @@ function _computeDerivedYear(year, months, prevYearSummary, inflationPct) {
   const count = months.length;
   const avgMonthlyGross = count ? totalGross / count : 0;
   const avgMonthlyNet = count ? totalNet / count : 0;
-  const avgPositionPct = count ? totalPosition / count : 0;
+  const avgMonthlyBonuses = count ? bonusesGross / count : 0;
+  // snapshot גובר; אחרת הערך השנתי שהוזן ידנית; אחרת undefined — "לא ידוע" אינו "0% משרה"
+  const avgPositionPct = positionMonths ? totalPosition / positionMonths : storedPositionPct;
+  const positionSource = positionMonths ? 'snapshot' : (storedPositionPct != null ? 'manual' : null);
   const netToGrossRatio = totalGross ? totalNet / totalGross : 0;
 
-  let incomeChangePct = 0;
-  let netChangePct = 0;
+  // WP13.3: undefined לשנה הראשונה (אין בסיס השוואה) — קודם אותחל ל-0 והוצג "0%" מטעה.
+  let incomeChangePct, netChangePct, bonusesChangePct;
   if (prevYearSummary && prevYearSummary.totalGross > 0) {
     incomeChangePct = (totalGross - prevYearSummary.totalGross) / prevYearSummary.totalGross;
   }
   if (prevYearSummary && prevYearSummary.totalNet > 0) {
     netChangePct = (totalNet - prevYearSummary.totalNet) / prevYearSummary.totalNet;
+  }
+  // שנה קודמת ללא מענקים כלל → אין אחוז שינוי בר-חישוב (חלוקה ב-0), לא "אינסוף" ולא 0
+  if (prevYearSummary && prevYearSummary.bonusesGross > 0) {
+    bonusesChangePct = (bonusesGross - prevYearSummary.bonusesGross) / prevYearSummary.bonusesGross;
   }
 
   return {
@@ -129,11 +169,14 @@ function _computeDerivedYear(year, months, prevYearSummary, inflationPct) {
     additionsGross,
     avgMonthlyGross,
     avgMonthlyNet,
+    avgMonthlyBonuses,
     incomeChangePct,
     netChangePct,
+    bonusesChangePct,
     inflationPct: inflationPct || 0,
     netToGrossRatio,
     avgPositionPct,
+    positionSource,
     unpaidHours,
   };
 }
@@ -153,14 +196,18 @@ function _computeManualYear(year, manual, prevYearSummary, inflationPct) {
 
   const avgMonthlyGross = (monthsCount && totalGross != null) ? totalGross / monthsCount : undefined;
   const avgMonthlyNet    = (monthsCount && totalNet   != null) ? totalNet   / monthsCount : undefined;
+  const avgMonthlyBonuses = (monthsCount && bonusesGross != null) ? bonusesGross / monthsCount : undefined;
   const netToGrossRatio  = (totalGross) ? (totalNet ?? 0) / totalGross : undefined;
 
-  let incomeChangePct, netChangePct;
+  let incomeChangePct, netChangePct, bonusesChangePct;
   if (prevYearSummary && prevYearSummary.totalGross > 0 && totalGross != null) {
     incomeChangePct = (totalGross - prevYearSummary.totalGross) / prevYearSummary.totalGross;
   }
   if (prevYearSummary && prevYearSummary.totalNet > 0 && totalNet != null) {
     netChangePct = (totalNet - prevYearSummary.totalNet) / prevYearSummary.totalNet;
+  }
+  if (prevYearSummary && prevYearSummary.bonusesGross > 0 && bonusesGross != null) {
+    bonusesChangePct = (bonusesGross - prevYearSummary.bonusesGross) / prevYearSummary.bonusesGross;
   }
 
   return {
@@ -172,10 +219,13 @@ function _computeManualYear(year, manual, prevYearSummary, inflationPct) {
     additionsGross: undefined, // אין snapshot לשנה ידנית-בלבד — נשאר ריק (—), לא 0 (ראו WP10.7)
     avgMonthlyGross,
     avgMonthlyNet,
+    avgMonthlyBonuses,
+    avgPositionPct: undefined, // אין snapshot — אחוז המשרה אינו ידוע לשנה ידנית (WP13.3)
     monthsCount,
     notes,
     incomeChangePct,
     netChangePct,
+    bonusesChangePct,
     inflationPct: inflationPct || 0,
     netToGrossRatio,
   };
@@ -199,6 +249,7 @@ export function computeYearSummaries(state) {
   }
 
   const inflationByYear = state.inflationByYear || {};
+  const positionByYear = state.positionPctByYear ?? {};
   const manualByYear = state.manualYearSummaries ?? {};
 
   // איחוד קבוצת השנים: שנים עם חודשים ∪ שנים עם סיכום ידני
@@ -214,12 +265,37 @@ export function computeYearSummaries(state) {
 
     if (monthsByYear[year]) {
       // derived תמיד גובר — שנה עם months אינה נדרסת ע"י manualYearSummaries גם אם קיים לה ערך שם
-      summaries.push(_computeDerivedYear(year, monthsByYear[year], prevYearSummary, inflationPct));
+      summaries.push(_computeDerivedYear(year, monthsByYear[year], prevYearSummary, inflationPct, positionByYear[year]));
     } else {
       summaries.push(_computeManualYear(year, manualByYear[year], prevYearSummary, inflationPct));
     }
   }
   return summaries;
+}
+
+function _drawCharts(container, summaries) {
+  renderChart(container.querySelector('#chart-annual'), 'annual', summaries);
+  renderChart(container.querySelector('#chart-monthly'), 'monthlyAvg', summaries);
+  renderChart(container.querySelector('#chart-inflation'), 'inflation', summaries);
+}
+
+// WP13.1: charts.js בוחר קנבס לפי media query (max-width:640px), ולכן חצייה של נקודת
+// השבירה — סיבוב מכשיר, שינוי גודל חלון — מחייבת ציור מחדש. מאזין יחיד ברמת המודול,
+// מוחלף בכל render כדי שלא יצטברו מאזינים בכל מעבר בין מסכים.
+let _chartMql = null;
+let _chartMqlHandler = null;
+
+function _wireChartBreakpoint(container, summaries) {
+  if (_chartMql && _chartMqlHandler) _chartMql.removeEventListener('change', _chartMqlHandler);
+  if (!window.matchMedia) return;
+
+  _chartMql = window.matchMedia('(max-width: 640px)');
+  _chartMqlHandler = () => {
+    // המסך אולי הוחלף מאז — מציירים רק אם המכלים עדיין ב-DOM
+    if (!container.isConnected || !container.querySelector('#chart-annual')) return;
+    _drawCharts(container, summaries);
+  };
+  _chartMql.addEventListener('change', _chartMqlHandler);
 }
 
 export function render(container, state) {
@@ -235,7 +311,10 @@ export function render(container, state) {
   let html = `<div class="card">
     <h2>${STRINGS.nav.history}</h2>
     <p class="hint">מעקב והשוואה של נתוני השכר לאורך השנים.</p>
-    <button type="button" class="btn-sec" id="btn-add-manual-year" style="margin-top:0.5rem;">${S.addManualYear}</button>
+    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem;">
+      <button type="button" class="btn-sec" id="btn-add-manual-year">${S.addManualYear}</button>
+      ${summaries.length ? `<button type="button" class="btn-primary" id="btn-export-history">${STRINGS.io.exportHistory}</button>` : ''}
+    </div>
     <div id="manual-year-form-slot"></div>
   </div>`;
 
@@ -247,22 +326,24 @@ export function render(container, state) {
   }
 
   // Charts Section (WP4.2)
+  // WP13.1: ערימה אנכית במקום שורת flex של שלושה. הגרפים נקראו קטן לא בגלל גודל הגופן אלא
+  // בגלל הפריסה — `flex:1 1 300px` דחס שלושה מכלים לרוחב ~300-420px כל אחד, ומול viewBox
+  // של 900 יחידות זה קנה-מידה של ~0.4, כלומר טקסט 15px הוצג כ-6px. מכל ברוחב מלא מחזיר את
+  // קנה המידה ל-~1 ומייתר הגדלות גופן מלאכותיות.
   html += `
-    <div class="card" style="margin-bottom: 2rem;">
-      <h3>מגמות ושכר (SVG)</h3>
-      <div style="display:flex; flex-wrap:wrap; gap:1.5rem; margin-top:1rem;">
-        <div style="flex:1 1 300px; min-width:300px; border:1px solid var(--color-border); border-radius:6px; padding:1rem;">
-          <h4 style="text-align:center; margin-bottom:1rem; color:var(--color-text-secondary);">ברוטו/נטו שנתי</h4>
-          <div id="chart-annual" style="height:250px;"></div>
-        </div>
-        <div style="flex:1 1 300px; min-width:300px; border:1px solid var(--color-border); border-radius:6px; padding:1rem;">
-          <h4 style="text-align:center; margin-bottom:1rem; color:var(--color-text-secondary);">ממוצע חודשי (ברוטו/נטו)</h4>
-          <div id="chart-monthly" style="height:250px;"></div>
-        </div>
-        <div style="flex:1 1 300px; min-width:300px; border:1px solid var(--color-border); border-radius:6px; padding:1rem;">
-          <h4 style="text-align:center; margin-bottom:1rem; color:var(--color-text-secondary);">שינוי הכנסה מול אינפלציה</h4>
-          <div id="chart-inflation" style="height:250px;"></div>
-        </div>
+    <div class="card chart-stack" style="margin-bottom:2rem;">
+      <h3>מגמות ושכר</h3>
+      <div class="chart-panel">
+        <h4>ברוטו/נטו שנתי</h4>
+        <div id="chart-annual"></div>
+      </div>
+      <div class="chart-panel">
+        <h4>ממוצע חודשי (ברוטו/נטו)</h4>
+        <div id="chart-monthly"></div>
+      </div>
+      <div class="chart-panel">
+        <h4>שינוי הכנסה מול אינפלציה</h4>
+        <div id="chart-inflation"></div>
       </div>
     </div>
   `;
@@ -288,54 +369,39 @@ export function render(container, state) {
         </h3>
 
         <div class="settings-grid" style="margin-bottom:1.5rem">
-          <div class="stat-box">
-            <div class="stat-label">${S.totalGross}</div>
-            <div class="stat-value">${_optCurrency(sum.totalGross)}</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">${S.totalNet}</div>
-            <div class="stat-value">${_optCurrency(sum.totalNet)}</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">${S.avgGross}</div>
-            <div class="stat-value" style="font-size:1.1rem">${_optCurrency(sum.avgMonthlyGross)}</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">${S.avgNet}</div>
-            <div class="stat-value" style="font-size:1.1rem">${_optCurrency(sum.avgMonthlyNet)}</div>
-          </div>
+          ${_statBox(S.totalGross, _optCurrency(sum.totalGross), false)}
+          ${_statBox(S.totalNet,   _optCurrency(sum.totalNet),   false)}
+          ${_statBox(S.avgGross,   _optCurrency(sum.avgMonthlyGross))}
+          ${_statBox(S.avgNet,     _optCurrency(sum.avgMonthlyNet))}
 
-          <div class="stat-box">
-            <div class="stat-label">${S.incomeChange}</div>
-            <div class="stat-value" style="font-size:1.1rem; color:${(sum.incomeChangePct ?? 0) >= 0 ? 'var(--color-success)' : 'var(--color-danger)'}">
-              ${sum.incomeChangePct == null ? S.emptyField : `${sum.incomeChangePct > 0 ? '+' : ''}${toPct(sum.incomeChangePct)}%`}
-            </div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">${S.netToGross}</div>
-            <div class="stat-value" style="font-size:1.1rem">${_optPct(sum.netToGrossRatio)}</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">${S.bonusesGross}</div>
-            <div class="stat-value" style="font-size:1.1rem">${_optCurrency(sum.bonusesGross)}</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">${S.additionsGross}</div>
-            <div class="stat-value" style="font-size:1.1rem">${_optCurrency(sum.additionsGross)}</div>
-          </div>
-          ${isManual ? `
-            <div class="stat-box">
-              <div class="stat-label">${S.monthsCount}</div>
-              <div class="stat-value" style="font-size:1.1rem">${sum.monthsCount ?? S.emptyField}</div>
-            </div>
-          ` : ''}
+          ${_statBox(S.avgPosition, sum.avgPositionPct == null ? S.emptyField
+              : `${(+sum.avgPositionPct.toFixed(2))}%${sum.positionSource === 'manual' ? ' <span class="hint" style="font-size:0.7rem">(הוזן)</span>' : ''}`)}
+          ${_changeBox(S.incomeChange, sum.incomeChangePct)}
+          ${_changeBox(S.netChange,    sum.netChangePct)}
+          ${_statBox(S.netToGross, _optPct(sum.netToGrossRatio))}
+
+          ${_statBox(S.bonusesGross, _optCurrency(sum.bonusesGross))}
+          ${_statBox(S.avgBonuses,   _optCurrency(sum.avgMonthlyBonuses))}
+          ${_changeBox(S.bonusesChange, sum.bonusesChangePct)}
+          ${_statBox(S.additionsGross, _optCurrency(sum.additionsGross))}
+
+          ${isManual ? _statBox(S.monthsCount, sum.monthsCount ?? S.emptyField) : ''}
         </div>
 
-        <form class="inflation-form" data-year="${sum.year}" style="margin-bottom:1.5rem; display:flex; gap:1rem; align-items:flex-end;">
+        <form class="inflation-form" data-year="${sum.year}" style="margin-bottom:1.5rem; display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
           <label class="field" style="width:150px; margin-bottom:0;">
             <span>${S.inflation}</span>
             <input type="number" step="0.1" name="inflation" value="${toPct(sum.inflationPct)}" />
           </label>
+          ${isManual ? '' : `
+            <label class="field" style="width:170px; margin-bottom:0;">
+              <span>${S.avgPosition}</span>
+              <input type="number" step="0.01" min="0" name="positionPct"
+                     value="${sum.positionSource === 'snapshot' ? '' : (state.positionPctByYear?.[sum.year] ?? '')}"
+                     ${sum.positionSource === 'snapshot' ? 'disabled' : ''}
+                     placeholder="${sum.positionSource === 'snapshot' ? 'מחושב מהתמונות' : '100'}" />
+            </label>
+          `}
           <button type="submit" class="btn-primary" style="padding:0.4rem 1rem;">${S.updateInflation}</button>
         </form>
 
@@ -351,18 +417,24 @@ export function render(container, state) {
                   <th>${S.month}</th>
                   <th>${S.gross}</th>
                   <th>${S.net}</th>
-                  <th>${S.overtime}</th>
+                  <th>${S.monthBonuses}</th>
+                  <th>${S.monthPosition}</th>
                 </tr>
               </thead>
               <tbody>
-                ${(monthsByYear[sum.year] || []).slice().sort((a,b) => b.id.localeCompare(a.id)).map(m => `
+                ${(monthsByYear[sum.year] || []).slice().sort((a,b) => b.id.localeCompare(a.id)).map(m => {
+                  // WP13.3: עמודת "שעות נוספות" הוסרה — overtimePay כבר כלול בברוטו (engine.js), כך
+                  // שהיא פירטה סכום שנספר ממילא. הוחלפה במענקים ובאחוז משרה לפי בקשת המשתמש.
+                  const pos = m.estimate?.paramsSnapshot?.personal?.positionPercent;
+                  return `
                   <tr>
                     <td style="font-weight:600">${m.id}</td>
                     <td>${_monthCell(m.actual?.gross, m.estimate?.gross, S.actualGross)}</td>
                     <td>${_monthCell(m.actual?.net, m.estimate?.net, S.actualNet)}</td>
-                    <td>${formatCurrency(m.estimate?.overtimePay || 0)}</td>
+                    <td>${m.actual?.bonuses ? formatCurrency(m.actual.bonuses) : S.emptyField}</td>
+                    <td>${pos == null ? S.emptyField : `${+pos.toFixed(2)}%`}</td>
                   </tr>
-                `).join('')}
+                `;}).join('')}
               </tbody>
             </table>
           </div>
@@ -374,10 +446,8 @@ export function render(container, state) {
   container.innerHTML = html;
 
   if (summaries.length > 0) {
-    // Render charts
-    renderChart(container.querySelector('#chart-annual'), 'annual', summaries);
-    renderChart(container.querySelector('#chart-monthly'), 'monthlyAvg', summaries);
-    renderChart(container.querySelector('#chart-inflation'), 'inflation', summaries);
+    _drawCharts(container, summaries);
+    _wireChartBreakpoint(container, summaries);
   }
 
   // Event listeners for inflation updates
@@ -386,15 +456,38 @@ export function render(container, state) {
       e.preventDefault();
       const year = parseInt(form.dataset.year, 10);
       const val = parseFloat(form.querySelector('[name="inflation"]').value) / 100 || 0;
+      // WP13.3: השדה לא קיים בשנה ידנית, ו-disabled כשאחוז המשרה מגיע מ-snapshot
+      const posInput = form.querySelector('[name="positionPct"]:not([disabled])');
+      const posRaw = posInput ? posInput.value.trim() : null;
 
       store.setState(s => {
         if (!s.inflationByYear) s.inflationByYear = {};
         s.inflationByYear[year] = val;
+
+        if (posInput) {
+          if (!s.positionPctByYear) s.positionPctByYear = {};
+          const n = Number(posRaw);
+          // ריק/לא-מספרי → מוחקים את המפתח כדי שהמדד יחזור ל-"—" ולא ייתקע על 0
+          if (posRaw === '' || !Number.isFinite(n) || n < 0) delete s.positionPctByYear[year];
+          else s.positionPctByYear[year] = n;
+        }
       });
     });
   });
 
   _wireAddYearButton(container, state);
+
+  // WP13.2 — ייצוא ההיסטוריה ל-Excel (הכפתור נוצר רק כשיש לפחות שנה אחת)
+  container.querySelector('#btn-export-history')?.addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      const { exportHistoryExcel } = await loadExcelIO();
+      await exportHistoryExcel();
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // עריכה/מחיקה של שנה ידנית (רק לשנים source:'manual' — לשנים נגזרות אין את הכפתורים האלה)
   container.querySelectorAll('.btn-edit-manual-year').forEach(btn => {

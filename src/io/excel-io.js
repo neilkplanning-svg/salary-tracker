@@ -38,8 +38,12 @@ const SHEET_ATTENDANCE = 'נוכחות';
 const SHEET_STATUS     = 'סטטוס חודשי';
 const SHEET_AIDFUND    = 'קרן עזרה';
 const SHEET_HISTORY    = 'היסטוריה שנתית';
+// WP13.2 — חוברת ההיסטוריה העצמאית (ייצוא/קריאה בלבד, אינה מיועדת לייבוא חוזר)
+const SHEET_HIST_YEARS  = 'סיכום שנתי';
+const SHEET_HIST_MONTHS = 'חודשים';
 const FILE_NAME          = 'salary-export.xlsx';
 const TEMPLATE_FILE_NAME = 'salary-template.xlsx';
+const HISTORY_FILE_NAME  = 'salary-history.xlsx';
 
 /**
  * מקור-אמת יחיד לשמות עמודות (עברית). מפתחות באנגלית לשימוש בקוד; ערכים = הכותרת בקובץ.
@@ -92,6 +96,27 @@ const C = {
   // WP10.7 — סה"כ תוספות קבועות: עמודת ייצוא/תצוגה בלבד (מחושב מ-snapshot שמור), ריק לשנה ידנית
   hAdditionsGross: 'סה"כ תוספות קבועות (מחושב)',
   inflation:     'אינפלציה (%)',
+  // WP13.2 — עמודות ייחודיות לחוברת ההיסטוריה העצמאית (ייצוא/קריאה בלבד)
+  hSource:         'מקור',
+  // כותרות ייעודיות לחוברת ההיסטוריה: בחוברת המלאה העמודות המקבילות נושאות סיומת
+  // "(לשנה ידנית)" כי שם הן רלוונטיות רק לשנים ללא חודשים — כאן הן מאוכלסות לכל שנה.
+  hMonths:         'מספר חודשים',
+  hRowNotes:       'הערות',
+  hAvgGrossPlain:  'ממוצע ברוטו חודשי',
+  hAvgNetPlain:    'ממוצע נטו חודשי',
+  hAdditionsPlain: 'סה"כ תוספות קבועות',
+  hAvgPosition:    'ממוצע אחוז משרה',
+  hGrossChange:    'שינוי ברוטו (%)',
+  hNetChange:      'שינוי נטו (%)',
+  hAvgBonuses:     'ממוצע מענקים חודשי',
+  hBonusesChange:  'שינוי מענקים (%)',
+  hNetToGross:     'יחס נטו/ברוטו (%)',
+  mGross:          'ברוטו',
+  mGrossSource:    'מקור הברוטו',
+  mNet:            'נטו',
+  mNetSource:      'מקור הנטו',
+  mBonuses:        'מענקים',
+  mPosition:       'אחוז משרה',
 };
 
 /** סדר העמודות בייצוא (כולל עמודות מחושבות) — מבטיח כותרות יציבות גם כשהנתונים ריקים */
@@ -271,6 +296,106 @@ function buildHistoryRows(state) {
     [C.hAdditionsGross]: r2OrBlank(s.additionsGross), // ריק לשנה ידנית (אין snapshot) — ראו WP10.7
     [C.inflation]:       r2((s.inflationPct ?? 0) * 100),
   }));
+}
+
+// ── WP13.2: חוברת היסטוריה עצמאית (ייצוא/קריאה בלבד) ──────────────────────
+//
+// נפרדת מ-exportExcel המלא בכוונה: זו חוברת *דוח* שנועדה לקריאה ולשיתוף, לא ל-round-trip.
+// parseWorkbook אינו מכיר את הגיליונות האלה, ולכן העלאתה חזרה לא תעשה דבר — ראו שורת
+// ההערה שנכתבת בראש גיליון "סיכום שנתי".
+//
+// אמנת התאים זהה לשאר הייצוא: r2OrBlank משאיר תא **ריק** ל-null/undefined (הבחנה בין
+// "לא הוזן" ל-0), ואחוזים נכתבים ככפולות 100.
+
+const HISTORY_EXPORT_HEADERS = {
+  years: [C.year, C.hSource, C.hMonths, C.hAvgPosition, C.hTotalGross, C.hTotalNet,
+          C.hAvgGrossPlain, C.hAvgNetPlain, C.hGrossChange, C.hNetChange, C.hBonusesGross,
+          C.hAvgBonuses, C.hBonusesChange, C.hAdditionsPlain, C.hNetToGross, C.inflation, C.hRowNotes],
+  months: [C.year, C.month, C.mGross, C.mGrossSource, C.mNet, C.mNetSource, C.mBonuses, C.mPosition],
+};
+
+/** אחוז שמור כשבר (0.031) → 3.1 לתא; ריק כשלא ניתן לחישוב (שנה ראשונה / אין בסיס) */
+function pctOrBlank(v) {
+  return v == null ? '' : r2(v * 100);
+}
+
+function buildHistoryYearRows(state) {
+  return computeYearSummaries(state).map(s => ({
+    [C.year]:            s.year,
+    [C.hSource]:         s.source === 'manual' ? 'ידני' : 'מחושב מחודשים',
+    [C.hMonths]:         s.monthsCount ?? (state.months || []).filter(m => m.id.startsWith(String(s.year))).length,
+    [C.hAvgPosition]:    s.avgPositionPct == null ? '' : r2(s.avgPositionPct),
+    [C.hTotalGross]:     r2OrBlank(s.totalGross),
+    [C.hTotalNet]:       r2OrBlank(s.totalNet),
+    [C.hAvgGrossPlain]:  r2OrBlank(s.avgMonthlyGross),
+    [C.hAvgNetPlain]:    r2OrBlank(s.avgMonthlyNet),
+    [C.hGrossChange]:    pctOrBlank(s.incomeChangePct),
+    [C.hNetChange]:      pctOrBlank(s.netChangePct),
+    [C.hBonusesGross]:   r2OrBlank(s.bonusesGross),
+    [C.hAvgBonuses]:     r2OrBlank(s.avgMonthlyBonuses),
+    [C.hBonusesChange]:  pctOrBlank(s.bonusesChangePct),
+    [C.hAdditionsPlain]: r2OrBlank(s.additionsGross),
+    [C.hNetToGross]:     pctOrBlank(s.netToGrossRatio),
+    [C.inflation]:       r2((s.inflationPct ?? 0) * 100),
+    [C.hRowNotes]:       s.notes ?? '',
+  }));
+}
+
+/**
+ * שורה לכל חודש. עמודות "מקור" עונות על "מאיפה הגיע המספר" בלי לפתוח את האפליקציה —
+ * ההכרעה בין בפועל למשוער היא **פר-שדה** (ראו computeYearSummaries), ולכן ייתכן שהברוטו
+ * יגיע מהתלוש והנטו מהמשוער באותו חודש עצמו.
+ */
+function buildHistoryMonthRows(state) {
+  return (state.months || [])
+    .filter(m => m.actual?.gross != null || m.actual?.net != null || m.estimate?.gross != null)
+    .slice()
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map(m => {
+      const grossFromActual = m.actual?.gross != null;
+      const netFromActual   = m.actual?.net   != null;
+      return {
+        [C.year]:         parseInt(m.id.slice(0, 4), 10),
+        [C.month]:        m.id,
+        [C.mGross]:       r2OrBlank(m.actual?.gross ?? m.estimate?.gross),
+        [C.mGrossSource]: grossFromActual ? 'בפועל' : (m.estimate?.gross != null ? 'משוער' : ''),
+        [C.mNet]:         r2OrBlank(m.actual?.net ?? m.estimate?.net),
+        [C.mNetSource]:   netFromActual ? 'בפועל' : (m.estimate?.net != null ? 'משוער' : ''),
+        [C.mBonuses]:     r2OrBlank(m.actual?.bonuses),
+        [C.mPosition]:    r2OrBlank(m.estimate?.paramsSnapshot?.personal?.positionPercent),
+      };
+    });
+}
+
+/**
+ * ייצוא גיליון ההיסטוריה בלבד לקובץ salary-history.xlsx (WP13.2) — נגיש ישירות ממסך
+ * ההיסטוריה. אינו נוגע ב-exportExcel המלא ואינו מיועד לייבוא חוזר.
+ * @returns {Promise<void>}
+ */
+export async function exportHistoryExcel() {
+  let XLSX;
+  try { XLSX = await loadXLSX(); } catch { alert(IO.errorVendorLoad); return; }
+
+  const state = store.getState();
+  const wb = XLSX.utils.book_new();
+  wb.Workbook = { Views: [{ RTL: true }] };
+
+  const yearRows  = buildHistoryYearRows(state);
+  const monthRows = buildHistoryMonthRows(state);
+
+  // שורת הבהרה מעל הכותרות — כדי שלא ינסו להעלות את הקובץ הזה בחזרה דרך "ייבוא Excel"
+  const yearsWs = XLSX.utils.aoa_to_sheet([[IO.exportHistoryNotice]]);
+  XLSX.utils.sheet_add_json(yearsWs, yearRows, { header: HISTORY_EXPORT_HEADERS.years, origin: 'A2' });
+  yearsWs['!cols'] = HISTORY_EXPORT_HEADERS.years.map(h => ({ wch: Math.max(12, String(h).length + 2) }));
+
+  const monthsWs = sheetFromRows(XLSX, monthRows, HISTORY_EXPORT_HEADERS.months);
+  monthsWs['!cols'] = HISTORY_EXPORT_HEADERS.months.map(h => ({ wch: Math.max(12, String(h).length + 2) }));
+
+  XLSX.utils.book_append_sheet(wb, yearsWs,  SHEET_HIST_YEARS);
+  XLSX.utils.book_append_sheet(wb, monthsWs, SHEET_HIST_MONTHS);
+
+  XLSX.writeFile(wb, HISTORY_FILE_NAME);
+  toast(IO.exportHistoryOk);
 }
 
 /**
