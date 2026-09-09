@@ -363,6 +363,10 @@ input:disabled {
 .att-shab { background: var(--color-surface); }
 .att-shab td { color: var(--color-text-secondary); }
 .att-fri { background: var(--color-surface); }
+/* חג — יום מנוחה מסומן ידנית; אותה סמנטיקה חזותית כמו שבת, בגוון סגול עדין שמבדיל בין
+   "לא יום עבודה מעצם היותו סופ"ש" לבין "לא יום עבודה כי סימנתי אותו" */
+.att-hol td { background: rgba(120,80,200,0.07); color: var(--color-text-secondary); }
+[data-theme="dark"] .att-hol td { background: rgba(150,120,240,0.12); }
 .att-open-row td { background: rgba(176,90,0,0.06); }
 [data-theme="dark"] .att-open-row td { background: rgba(255,160,0,0.08); }
 
@@ -447,11 +451,17 @@ input:disabled {
 .bdg-shab  { background: var(--color-surface); color: var(--color-text-secondary); }
 .bdg-vac   { background: #d0f0e0; color: #0a5a32; }
 .bdg-sick  { background: #fde8e8; color: #8b1a1a; }
+.bdg-hol   { background: #e6e0f8; color: #3d2a70; }
 [data-theme="dark"] .bdg-pres  { background: #0a3020; color: #60d080; }
 [data-theme="dark"] .bdg-open  { background: #3a1e00; color: #f0a030; }
 [data-theme="dark"] .bdg-train { background: #2e2000; color: #f0c040; }
 [data-theme="dark"] .bdg-vac   { background: #0a2a18; color: #50d090; }
 [data-theme="dark"] .bdg-sick  { background: #2e0a0a; color: #e08080; }
+[data-theme="dark"] .bdg-hol   { background: #1e1636; color: #b9a6f0; }
+
+/* סימון חג ב-modal עריכת יום */
+.att-hol-check { margin-top: 0.7rem; }
+.att-hol-hint  { margin-top: 0.2rem; font-size: 0.78rem; }
 
 /* כפתור עריכה בשורה */
 .btn-edit-row {

@@ -22,7 +22,9 @@
  *  3. שישי/שבת: **לא** במכנה (אינם ימי עבודה אפשריים), אבל עבודה בפועל בשישי כן נספרת
  *     במונה — ולכן חודש עם שישיות עמוסים יכול לעבור 100%. היעדרות שנרשמה בטעות על
  *     שישי/שבת אינה נספרת (אין ממה להיעדר).
- *  4. חגים אינם מוכרים לאפליקציה — יום חג שלא עבדתם בו ירד מהאחוז אלא אם נרשם כחופשה.
+ *  4. **חג = כמו שבת**: יום שסומן `holiday: true` ברשת הנוכחות יוצא מהמכנה (אינו יום עבודה
+ *     אפשרי). עבודה בפועל בחג נספרת במונה, בדיוק כמו עבודה בשישי; היעדרות שנרשמה על חג אינה
+ *     נספרת (אין ממה להיעדר). הסימון ידני, פר-יום, במסך הנוכחות — אין לאפליקציה לוח חגים.
  */
 
 /** שעות נוכחות ליום מלא כשאין attendanceParams (ערך ברירת המחדל הלאומי) */
@@ -41,22 +43,38 @@ function dow(dateStr) {
 }
 
 /**
- * האם התאריך הוא יום עבודה אפשרי (א'–ה'). שישי (5) ושבת (6) אינם נספרים במכנה.
+ * האם התאריך הוא יום עבודה אפשרי. שישי (5), שבת (6) וימים שסומנו כחג אינם נספרים במכנה.
  * @param {string} dateStr 'YYYY-MM-DD'
+ * @param {Set<string>|null} [holidays] תאריכי חג ('YYYY-MM-DD') שסומנו ברשת הנוכחות
  * @returns {boolean}
  */
-export function isWorkDay(dateStr) {
+export function isWorkDay(dateStr, holidays = null) {
+  if (holidays?.has(dateStr)) return false;
   const d = dow(dateStr);
   return d !== 5 && d !== 6;
 }
 
 /**
- * מספר ימי העבודה האפשריים בחודש (א'–ה').
+ * אוסף את תאריכי החג מרשת הימים (`day.holiday === true`).
+ * @param {object[]} days
+ * @returns {Set<string>}
+ */
+export function holidayDatesOf(days) {
+  const set = new Set();
+  for (const d of (days ?? [])) {
+    if (d?.holiday === true && typeof d.date === 'string') set.add(d.date);
+  }
+  return set;
+}
+
+/**
+ * מספר ימי העבודה האפשריים בחודש (א'–ה', ללא ימים שסומנו כחג).
  * @param {string} monthId 'YYYY-MM'
  * @param {string|null} [asOf] 'YYYY-MM-DD' — לספירה חלקית עד תאריך זה ועד בכלל (חודש מתמשך)
+ * @param {Set<string>|null} [holidays] תאריכי חג להחרגה
  * @returns {number} 0 כש-monthId אינו תקין
  */
-export function countWorkDays(monthId, asOf = null) {
+export function countWorkDays(monthId, asOf = null, holidays = null) {
   if (typeof monthId !== 'string' || !/^\d{4}-\d{2}$/.test(monthId)) return 0;
   const [y, m] = monthId.split('-').map(Number);
   const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
@@ -65,7 +83,7 @@ export function countWorkDays(monthId, asOf = null) {
   for (let i = 1; i <= lastDay; i++) {
     const date = `${monthId}-${String(i).padStart(2, '0')}`;
     if (asOf && date > asOf) break;
-    if (isWorkDay(date)) count++;
+    if (isWorkDay(date, holidays)) count++;
   }
   return count;
 }
@@ -105,19 +123,22 @@ function leaveHoursOf(day, fullDayHours) {
  * אחוז משרה לחודש בודד.
  * @param {object} p
  * @param {string|null} [p.monthId] 'YYYY-MM' (אם חסר — נגזר מהתאריך הראשון ב-days)
- * @param {object[]} [p.days] ימי החודש כפי שנשמרו (raw או מועשרים — שניהם נתמכים)
+ * @param {object[]} [p.days] ימי החודש כפי שנשמרו (raw או מועשרים — שניהם נתמכים);
+ *   יום עם `holiday: true` יוצא ממניין ימי העבודה האפשריים
  * @param {object|null} [p.params] settings.national.attendanceParams
  * @param {string|null} [p.asOf] 'YYYY-MM-DD' — חודש מתמשך: מוסיף חתך "עד היום" ב-toDate
  * @returns {{ monthId:string|null, presenceHours:number, leaveHours:number, countedHours:number,
- *             workDays:number, potentialHours:number, positionPct:number|null, hasData:boolean,
- *             toDate:{ workDays:number, potentialHours:number, countedHours:number,
- *                      positionPct:number|null }|null }}
+ *             workDays:number, holidayDays:number, potentialHours:number,
+ *             positionPct:number|null, hasData:boolean,
+ *             toDate:{ workDays:number, holidayDays:number, potentialHours:number,
+ *                      countedHours:number, positionPct:number|null }|null }}
  *   positionPct = null כשאין מכנה (חודש לא ידוע) — "לא ידוע" אינו "0% משרה".
  */
 export function calcMonthPosition({ monthId = null, days = [], params = null, asOf = null } = {}) {
   const fullDayHours = params?.fullDayHours ?? DEFAULT_FULL_DAY_HOURS;
   const list = Array.isArray(days) ? days : [];
   const id = monthId ?? list.find(d => typeof d?.date === 'string')?.date?.slice(0, 7) ?? null;
+  const holidays = holidayDatesOf(list);
 
   let presenceHours = 0, leaveHours = 0;
   let presenceToDate = 0, leaveToDate = 0;
@@ -128,8 +149,8 @@ export function calcMonthPosition({ monthId = null, days = [], params = null, as
     if (id && !d.date.startsWith(id)) continue; // הגנה: יום שאינו שייך לחודש הזה
 
     const presence = presenceHoursOf(d);
-    // היעדרות נספרת רק על יום עבודה אפשרי (מוסכמה #3)
-    const leave    = isWorkDay(d.date) ? leaveHoursOf(d, fullDayHours) : 0;
+    // היעדרות נספרת רק על יום עבודה אפשרי — לא בשישי/שבת ולא בחג (מוסכמות #3–#4)
+    const leave    = isWorkDay(d.date, holidays) ? leaveHoursOf(d, fullDayHours) : 0;
     if (presence > 0 || leave > 0) hasData = true;
 
     presenceHours += presence;
@@ -140,19 +161,30 @@ export function calcMonthPosition({ monthId = null, days = [], params = null, as
     }
   }
 
-  const workDays       = id ? countWorkDays(id) : 0;
+  const workDays       = id ? countWorkDays(id, null, holidays) : 0;
   const potentialHours = workDays * fullDayHours;
   const countedHours   = presenceHours + leaveHours;
+
+  // ימי חג שהורידו בפועל מהמכנה (חג שנפל בשישי/שבת ממילא לא נספר) — לתצוגה/הסבר
+  let holidayDays = 0, holidayDaysToDate = 0;
+  for (const date of holidays) {
+    if (id && !date.startsWith(id)) continue;
+    const d = dow(date);
+    if (d === 5 || d === 6) continue;
+    holidayDays++;
+    if (asOf && date <= asOf) holidayDaysToDate++;
+  }
 
   // חתך "עד היום" — רק כשהחודש חתוך באמת ע"י asOf (חודש מתמשך)
   let toDate = null;
   if (asOf && id) {
-    const workDaysToDate = countWorkDays(id, asOf);
+    const workDaysToDate = countWorkDays(id, asOf, holidays);
     if (workDaysToDate < workDays) {
       const potentialToDate = workDaysToDate * fullDayHours;
       const countedToDate   = presenceToDate + leaveToDate;
       toDate = {
         workDays:       workDaysToDate,
+        holidayDays:    holidayDaysToDate,
         potentialHours: r2(potentialToDate),
         presenceHours:  r2(presenceToDate),
         leaveHours:     r2(leaveToDate),
@@ -168,6 +200,7 @@ export function calcMonthPosition({ monthId = null, days = [], params = null, as
     leaveHours:     r2(leaveHours),
     countedHours:   r2(countedHours),
     workDays,
+    holidayDays,
     potentialHours: r2(potentialHours),
     positionPct:    potentialHours > 0 ? r2((countedHours / potentialHours) * 100) : null,
     hasData,
@@ -204,6 +237,7 @@ export function monthPositionOf(month, params = null, asOf = null) {
       leaveHours:     null,
       countedHours:   r2(counted),
       workDays:       est.positionWorkDays ?? 0,
+      holidayDays:    est.positionHolidayDays ?? 0,
       potentialHours: r2(potential),
       positionPct:    est.positionPct ?? r2((counted / potential) * 100),
       hasData:        true,
@@ -228,15 +262,15 @@ export function monthPositionOf(month, params = null, asOf = null) {
  * @param {object|null} [p.params] settings.national.attendanceParams
  * @param {string|null} [p.asOf] 'YYYY-MM-DD' — שנה מתמשכת: החודש הנוכחי נספר עד תאריך זה
  * @returns {{ year:number, presenceHours:number, leaveHours:number, countedHours:number,
- *             workDays:number, potentialHours:number, positionPct:number|null,
- *             monthsCounted:number, hasData:boolean }}
+ *             workDays:number, holidayDays:number, potentialHours:number,
+ *             positionPct:number|null, monthsCounted:number, hasData:boolean }}
  */
 export function calcYearPosition({ year, months = [], params = null, asOf = null } = {}) {
   const prefix = String(year);
   const list = Array.isArray(months) ? months : [];
 
   let presenceHours = 0, leaveHours = 0, countedHours = 0;
-  let workDays = 0, potentialHours = 0, monthsCounted = 0;
+  let workDays = 0, holidayDays = 0, potentialHours = 0, monthsCounted = 0;
 
   for (const m of list) {
     if (typeof m?.id !== 'string' || !m.id.startsWith(prefix + '-')) continue;
@@ -251,6 +285,7 @@ export function calcYearPosition({ year, months = [], params = null, asOf = null
     leaveHours     += eff.leaveHours    ?? 0;
     countedHours   += eff.countedHours;
     workDays       += eff.workDays;
+    holidayDays    += eff.holidayDays ?? 0;
     potentialHours += eff.potentialHours;
     monthsCounted++;
   }
@@ -261,6 +296,7 @@ export function calcYearPosition({ year, months = [], params = null, asOf = null
     leaveHours:     r2(leaveHours),
     countedHours:   r2(countedHours),
     workDays,
+    holidayDays,
     potentialHours: r2(potentialHours),
     positionPct:    potentialHours > 0 ? r2((countedHours / potentialHours) * 100) : null,
     monthsCounted,

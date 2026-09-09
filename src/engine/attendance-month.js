@@ -10,12 +10,12 @@
  * מכסה חיסורים בסדר: שעות אפס → ש"נ → ללא-אישור → ירידת שכר.
  * חיסור מוכשר: isHalfDay=true (≥ חצי יום נוכחות).
  * חיסור ישיר: < חצי יום — עובר לירידת שכר ללא מאגרים (WORK_PLAN §C).
- * שישי (fridayAllOvertime): לא יוצר חיסור רגיל.
+ * שישי (fridayAllOvertime): לא יוצר חיסור רגיל. חג (day.holiday) — כמו שבת: לא יוצר חיסור.
  */
 
 /**
  * @param {object[]} days — ימי חודש מועשרים (presenceInQuota, isFullDay, isHalfDay,
- *                          zeroHours, overtimeHours, unapprovedHours, leave?, date?)
+ *                          zeroHours, overtimeHours, unapprovedHours, leave?, holiday?, date?)
  * @param {{ fullDayHours:number, halfDayHours:number, fridayAllOvertime:boolean }} params
  * @returns {{ totalShortfall, totalZero, totalOT, totalUnapproved,
  *             coveredFromZero, coveredFromOT, coveredFromUnapproved,
@@ -40,6 +40,10 @@ export function calcMonthlyShortfall(days, params) {
       ? new Date(d.date + 'T12:00:00Z').getDay() === 5
       : false;
     if (isFriday && fridayAllOvertime) continue;
+
+    // חג (סומן ידנית ברשת הנוכחות) — יום מנוחה כמו שבת: אינו יום עבודה, ולכן אינו יוצר חיסור
+    // גם אם נעבד בו חלקית. השעות עצמן ממשיכות להיספר במאגרים למעלה (אפס/ש"נ/ללא-אישור).
+    if (d.holiday === true) continue;
 
     // חופשה/מחלה/השתלמות (WP8.3) — מכסים יום מלא; לא יוצרים חיסור
     if (d.leave) continue;

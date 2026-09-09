@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calcMonthPosition, calcYearPosition, countWorkDays, isWorkDay, monthPositionOf }
   from '../src/engine/position.js';
+import { calcMonthlyShortfall } from '../src/engine/attendance-month.js';
 
 const PARAMS = { fullDayHours: 8.9, defaultBreakCode: 1, breakWindows: [[11.5, 12], [12, 12.5], [12.5, 13]] };
 
@@ -45,6 +46,13 @@ test('countWorkDays — asOf חותך את הספירה באמצע החודש', 
   assert.equal(countWorkDays('2026-01', '2026-01-08'), 6);
   assert.equal(countWorkDays('2026-01', '2025-12-31'), 0); // חודש עתידי כולו
   assert.equal(countWorkDays('2026-01', '2026-02-15'), 21); // asOf אחרי סוף החודש
+});
+
+test('countWorkDays — ימי חג מוחרגים מהספירה', () => {
+  const holidays = new Set(['2026-01-05', '2026-01-06', '2026-01-03']); // השלישי הוא שבת ממילא
+  assert.equal(countWorkDays('2026-01', null, holidays), 19);
+  assert.equal(isWorkDay('2026-01-05', holidays), false);
+  assert.equal(isWorkDay('2026-01-05'), true);
 });
 
 test('countWorkDays — monthId לא תקין מחזיר 0 (ולא נופל)', () => {
@@ -145,6 +153,93 @@ test('יום שאינו שייך לחודש מסונן החוצה', () => {
   const days = [day('2026-01-05', '06:30', '15:24'), day('2026-02-05', '06:30', '15:24')];
   const pos = calcMonthPosition({ monthId: '2026-01', days, params: PARAMS });
   assert.equal(pos.presenceHours, 8.9);
+});
+
+// ─── חג — כמו שבת ─────────────────────────────────────────────────────────
+
+/** יום שסומן כחג (ללא עבודה) */
+const holidayDay = (date, extra = {}) =>
+  ({ date, start: null, end: null, breakCode: null, leave: null, training: false, holiday: true, ...extra });
+
+test('חג יוצא ממניין ימי העבודה האפשריים (המכנה קטן), כמו שבת', () => {
+  const days = workDaysOf('2026-01', d => day(d, '06:30', '15:24'));
+  // מסמנים שני ימי חג בימי א׳–ה׳ — ומסירים מהם את הנוכחות (לא עבדו בחג)
+  const withHolidays = days
+    .filter(d => d.date !== '2026-01-05' && d.date !== '2026-01-06')
+    .concat([holidayDay('2026-01-05'), holidayDay('2026-01-06')]);
+
+  const pos = calcMonthPosition({ monthId: '2026-01', days: withHolidays, params: PARAMS });
+  assert.equal(pos.workDays, 19);          // 21 − 2
+  assert.equal(pos.holidayDays, 2);
+  assert.equal(pos.potentialHours, +(19 * 8.9).toFixed(2));
+  assert.equal(pos.positionPct, 100);      // עבדתי בכל שאר ימי העבודה → משרה מלאה
+});
+
+test('בלי סימון חג — אותו חודש יורד מתחת ל-100% (זו בדיוק הבעיה שהסימון פותר)', () => {
+  const days = workDaysOf('2026-01', d => day(d, '06:30', '15:24'))
+    .filter(d => d.date !== '2026-01-05' && d.date !== '2026-01-06');
+
+  const pos = calcMonthPosition({ monthId: '2026-01', days, params: PARAMS });
+  assert.equal(pos.workDays, 21);
+  assert.equal(pos.positionPct, +((19 / 21) * 100).toFixed(2)); // 90.48%
+});
+
+test('עבודה בפועל בחג נספרת במונה (כמו שישי) — ויכולה להעלות מעל 100%', () => {
+  const days = workDaysOf('2026-01', d => day(d, '06:30', '15:24'))
+    .filter(d => d.date !== '2026-01-05')
+    .concat([holidayDay('2026-01-05', { start: '08:00', end: '12:00' })]);
+
+  const pos = calcMonthPosition({ monthId: '2026-01', days, params: PARAMS });
+  assert.equal(pos.workDays, 20);              // החג יצא מהמכנה
+  assert.equal(pos.presenceHours, +(20 * 8.9 + 4).toFixed(2)); // 4 שעות החג נספרו במונה
+  assert.ok(pos.positionPct > 100);
+});
+
+test('היעדרות שנרשמה על חג אינה נספרת (אין ממה להיעדר)', () => {
+  const pos = calcMonthPosition({
+    monthId: '2026-01', params: PARAMS,
+    days: [holidayDay('2026-01-05', { leave: { type: 'vacation', hours: 8.9 } })],
+  });
+  assert.equal(pos.leaveHours, 0);
+  assert.equal(pos.hasData, false);
+});
+
+test('חג שנפל בשישי/שבת אינו מוריד מהמכנה פעמיים', () => {
+  const pos = calcMonthPosition({
+    monthId: '2026-01', params: PARAMS,
+    days: [holidayDay('2026-01-02'), holidayDay('2026-01-03')], // שישי + שבת
+  });
+  assert.equal(pos.workDays, 21);
+  assert.equal(pos.holidayDays, 0);
+});
+
+test('שנתי — ימי החג יורדים מהמכנה השנתי ונספרים ב-holidayDays', () => {
+  const jan = workDaysOf('2026-01', d => day(d, '06:30', '15:24'))
+    .filter(d => d.date !== '2026-01-05')
+    .concat([holidayDay('2026-01-05')]);
+  const feb = workDaysOf('2026-02', d => day(d, '06:30', '15:24'));
+
+  const pos = calcYearPosition({
+    year: 2026, params: PARAMS,
+    months: [{ id: '2026-01', days: jan }, { id: '2026-02', days: feb }],
+  });
+  assert.equal(pos.workDays, 40);      // (21−1) + 20
+  assert.equal(pos.holidayDays, 1);
+  assert.equal(pos.positionPct, 100);
+});
+
+test('חג אינו יוצר חיסור חודשי (calcMonthlyShortfall) — כמו שבת', () => {
+  const params = { fullDayHours: 8.9, halfDayHours: 4.45, fridayAllOvertime: true };
+  const partialDay = {
+    date: '2026-01-05', presenceInQuota: 5, isFullDay: false, isHalfDay: true,
+    zeroHours: 0, overtimeHours: 0, unapprovedHours: 0,
+  };
+  const withoutMark = calcMonthlyShortfall([partialDay], params);
+  const withMark    = calcMonthlyShortfall([{ ...partialDay, holiday: true }], params);
+
+  assert.ok(withoutMark.totalShortfall > 0, 'יום חלקי רגיל כן יוצר חיסור');
+  assert.equal(withMark.totalShortfall, 0);
+  assert.equal(withMark.salaryCutHours, 0);
 });
 
 // ─── חודש מתמשך (asOf) ────────────────────────────────────────────────────

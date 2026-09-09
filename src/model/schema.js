@@ -370,6 +370,10 @@ export function validate(doc) {
         if (!Number.isInteger(d.breakCode) || d.breakCode < 0 || (bwLen > 0 && d.breakCode >= bwLen))
           errors.push(`breakCode לא תקין ביום ${d.date}: ${d.breakCode}`);
       }
+      // holiday: חג — יום מנוחה מסומן ידנית (כמו שבת). בוליאני בלבד; חסר = false.
+      if (d.holiday != null && typeof d.holiday !== 'boolean') {
+        errors.push(`holiday לא תקין ביום ${d.date} — נדרש true/false`);
+      }
       // leave (WP8.3): { type, hours } — type חייב להיות מחרוזת מוכרת, hours ≥ 0
       if (d.leave) {
         const validTypes = ['vacation', 'sick', 'training'];

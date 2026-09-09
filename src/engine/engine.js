@@ -306,6 +306,7 @@ export function calculate({ national, personal, month, reductions = null, aidFun
     positionCountedHours:   position.countedHours,
     positionPotentialHours: position.potentialHours,
     positionWorkDays:       position.workDays,
+    positionHolidayDays:    position.holidayDays,
     // WP8.2: נתוני השלמת חיסורים חודשית
     shortfallComputed:     hasComputedDays,
     salaryCutHours:        round2(shortfall.salaryCutHours),

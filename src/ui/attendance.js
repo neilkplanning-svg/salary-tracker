@@ -104,6 +104,7 @@ function _emptyDay(date) {
     breakCode: null,        // null = השתמש ב-defaultBreakCode מהגדרות
     regularHours: 0, zeroHours: 0, overtimeHours: 0,
     training: false, present: false, leave: null,
+    holiday: false,         // חג — יום מנוחה כמו שבת: יוצא ממניין ימי העבודה האפשריים
   };
 }
 
@@ -295,11 +296,15 @@ function _tableRow(day, todayStr) {
   const zero  = day.zeroHours      ?? 0;
   const unap  = day.unapprovedHours ?? 0;
 
-  const isShortfall = hasComputed && !day.isFullDay && !isShab && !day.leave && !day.training
+  const isHoliday = day.holiday === true;
+  // חג — כמו שבת: אינו יום עבודה, ולכן יום חלקי בו אינו "חיסור" (עקבי עם calcMonthlyShortfall)
+  const isShortfall = hasComputed && !day.isFullDay && !isShab && !isHoliday
+                      && !day.leave && !day.training
                       && (day.presenceInQuota ?? 0) > 0;
 
   let cls = 'att-row';
   if (isShab)      cls += ' att-shab';
+  if (isHoliday)   cls += ' att-hol';
   if (isFri)       cls += ' att-fri';
   if (day.date === todayStr) cls += ' att-today';
   if (day.present && day.start && !day.end) cls += ' att-open-row';
@@ -309,6 +314,10 @@ function _tableRow(day, todayStr) {
   // WP8.9: יום עם שעות עבודה בפועל שהושלם בחופשה/מחלה = יום נוכחות רגיל, לא יום היעדרות
   const workedWithCompletion = day.start != null && leaveType != null && leaveType !== 'training';
   let badge = '';
+  // תג החג מוצג תמיד (גם כשעבדו בו) — הוא מסביר למה היום אינו נספר כיום עבודה אפשרי
+  const holBadge = isHoliday && !isShab
+    ? `<span class="bdg bdg-hol" title="${STRINGS.attendance.holidayHint}">${STRINGS.attendance.holiday}</span> `
+    : '';
   if (isShab)                       badge = '<span class="bdg bdg-shab">שבת</span>';
   else if (day.present && day.start && !day.end) badge = '<span class="bdg bdg-open">פתוח</span>';
   else if (workedWithCompletion)     badge = `<span class="bdg bdg-pres" title="הושלם ליום מלא (${day.leave?.hours ?? 0} ש׳ ${leaveType === 'sick' ? 'מחלה' : 'חופשה'})">נוכח</span>`;
@@ -316,6 +325,8 @@ function _tableRow(day, todayStr) {
   else if (leaveType === 'sick')     badge = '<span class="bdg bdg-sick">מחלה</span>';
   else if (leaveType === 'training') badge = '<span class="bdg bdg-train">השתלמות</span>';
   else if (day.present)              badge = '<span class="bdg bdg-pres">נוכח</span>';
+
+  badge = holBadge + badge;
 
   const shortfallIcon = isShortfall ? ' <span class="att-shortfall-icon" title="חיסור — לא יום מלא">⚠</span>' : '';
 
@@ -399,6 +410,8 @@ function _positionHTML(position) {
       ? [[A.positionPotentialToDate, `${_fmtSum(position.toDate.potentialHours)} (${position.toDate.workDays} ימים)`],
          [A.positionPotentialMonth,  `${_fmtSum(position.potentialHours)} (${position.workDays} ימים)`]]
       : [[A.positionPotential,       `${_fmtSum(position.potentialHours)} (${position.workDays} ימים)`]]),
+    // מוצג רק כשיש חגים — מסביר למה מספר ימי העבודה האפשריים נמוך מהרגיל
+    ...(position.holidayDays > 0 ? [[A.positionHolidays, `${position.holidayDays} ימים`]] : []),
   ];
   return `<div class="card att-sum att-position" title="${A.positionHint}">${
     items.map(([lbl, val]) =>
@@ -455,6 +468,7 @@ function _shortfallIndicatorHTML(shortfall) {
  * - start / end
  * - breakCode ייחודי ליום (אופציונלי — null = השתמש בברירת מחדל)
  * - leave (חופשה/מחלה/השתלמות)
+ * - סימון חג (יום מנוחה — יוצא ממניין ימי העבודה האפשריים)
  * - אין checkbox נוכחות (אוטומטי מ-start/end)
  * - אין שדות reg/ot/zero ידניים (מחושבים)
  * - preview מחושב בזמן אמת
@@ -501,6 +515,11 @@ function _modalHTML(attParams) {
           <label>${STRINGS.attendance.leaveHours} <input type="number" id="att-m-leave-hrs" min="0" max="24" step="0.5"></label>
           <button type="button" class="btn-sec" id="att-m-complete-day">${STRINGS.attendance.leaveCompleteFull}</button>
         </div>
+        <label class="field-check att-hol-check">
+          <input type="checkbox" id="att-m-holiday">
+          <span>${STRINGS.attendance.holidayMark}</span>
+        </label>
+        <p class="hint att-hol-hint">${STRINGS.attendance.holidayHint}</p>
       </div>
 
       <div class="att-modal-acts">
@@ -611,6 +630,9 @@ function _openModal(container, monthId, day, attParams) {
   let _leaveType = day.leave?.type ?? (day.training ? 'training' : '');
   leaveHrsEl.value = day.leave?.hours ?? '';
 
+  const holidayEl = modal.querySelector('#att-m-holiday');
+  holidayEl.checked = day.holiday === true;
+
   const _syncLeaveUI = () => {
     leaveBtns.forEach(b => b.classList.toggle('active', b.dataset.type === _leaveType));
     leaveHrsRow.style.display = (_leaveType && _leaveType !== 'training') ? '' : 'none';
@@ -685,6 +707,7 @@ function _openModal(container, monthId, day, attParams) {
       breakCode: bc,
       training:  _leaveType === 'training',
       leave,
+      holiday:   holidayEl.checked,
       // present אוטומטי ב-_saveDay
     };
     modal.close();

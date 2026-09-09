@@ -59,6 +59,7 @@ const C = {
   out:        'יציאה',
   breakCode:  'קוד הפסקה',
   leaveType:  'סוג היעדרות',
+  holiday:    'חג',
   leaveHours: 'שעות היעדרות',
   // נוכחות — מחושב (ייצוא בלבד; מתעלמים בייבוא)
   cRegular:    'שעות רגילות (מחושב)',
@@ -123,7 +124,7 @@ const C = {
 /** סדר העמודות בייצוא (כולל עמודות מחושבות) — מבטיח כותרות יציבות גם כשהנתונים ריקים */
 const EXPORT_HEADERS = {
   attendance: [C.month, C.date, C.dow, C.in, C.out, C.breakCode, C.leaveType, C.leaveHours,
-               C.cRegular, C.cOvertime, C.cZero, C.cUnapproved],
+               C.holiday, C.cRegular, C.cOvertime, C.cZero, C.cUnapproved],
   status:     [C.month, C.otCap, C.estGross, C.estNet, C.estComputedAt, C.actGross, C.actNet,
                C.actOT, C.actBonus, C.notes, C.redFromReg, C.redFromOT, C.redQBonus, C.redBonusDed],
   aidFund:    [C.afType, C.date, C.afAmount, C.afMonthly, C.notes],
@@ -133,7 +134,7 @@ const EXPORT_HEADERS = {
 
 /** עמודות התבנית (קלט בלבד — ללא עמודות מחושבות/תמונה-שמורה) */
 const TEMPLATE_HEADERS = {
-  attendance: [C.date, C.in, C.out, C.breakCode, C.leaveType, C.leaveHours],
+  attendance: [C.date, C.in, C.out, C.breakCode, C.leaveType, C.leaveHours, C.holiday],
   status:     [C.month, C.otCap, C.actGross, C.actNet, C.actOT, C.actBonus, C.notes,
                C.redFromReg, C.redFromOT, C.redQBonus, C.redBonusDed],
   aidFund:    [C.afType, C.date, C.afAmount, C.afMonthly, C.notes],
@@ -145,10 +146,11 @@ const TEMPLATE_HEADERS = {
 /** שורות דוגמה לתבנית — מיושרות בדיוק לסדר TEMPLATE_HEADERS של אותו גיליון */
 const TEMPLATE_EXAMPLES = {
   attendance: [
-    ['2026-06-01', '08:00', '17:00', '',    '',        ''],
-    ['2026-06-02', '08:00', '13:00', 'ללא', '',        ''],
-    ['2026-06-03', '',      '',      '',    'חופשה',   8],
-    ['2026-06-04', '',      '',      '',    'השתלמות', ''],
+    ['2026-06-01', '08:00', '17:00', '',    '',        '',  ''],
+    ['2026-06-02', '08:00', '13:00', 'ללא', '',        '',  ''],
+    ['2026-06-03', '',      '',      '',    'חופשה',   8,   ''],
+    ['2026-06-04', '',      '',      '',    'השתלמות', '',  ''],
+    ['2026-06-05', '',      '',      '',    '',        '',  'V'],
   ],
   status: [
     ['2026-06', 30, '', '', '', '', 'שורת דוגמה — החלף/מחק', '', '', '', ''],
@@ -238,6 +240,7 @@ function buildAttendanceRows(state) {
         [C.breakCode]:  d.breakCode == null ? '' : (d.breakCode === -1 ? 'ללא' : d.breakCode),
         [C.leaveType]:  LEAVE_LABELS[d.leave?.type] ?? '',
         [C.leaveHours]: d.leave?.hours ?? '',
+        [C.holiday]:    d.holiday === true ? 'V' : '',
         [C.cRegular]:    cat ? r2(cat.regularPaid)     : '',
         [C.cOvertime]:   cat ? r2(cat.overtimeHours)   : '',
         [C.cZero]:       cat ? r2(cat.zeroHours)       : '',
@@ -475,6 +478,7 @@ function buildInstructionRows(state) {
     [C.breakCode, `ריק = ברירת המחדל מההגדרות (${defLabel}).  "ללא" = ללא ניכוי הפסקה.  מספר = אינדקס חלון הפסקה:  ${bwLegend}.`],
     [C.leaveType, 'אחד מ: חופשה / מחלה / השתלמות.  השאר ריק ביום עבודה רגיל.'],
     [C.leaveHours, 'מספר שעות ההיעדרות (למשל 8).  בהשתלמות ניתן להשאיר ריק — יחושב יום מלא.'],
+    [C.holiday, 'סמן "V" ליום חג — יום מנוחה כמו שבת: אינו נספר כיום עבודה אפשרי בחישוב אחוז המשרה ואינו יוצר חיסור. השאר ריק ביום רגיל.'],
     ['', ''],
     ['— גיליון "סטטוס חודשי" —', `שורה לכל חודש; העמודה "${C.month}" (חובה): MM/YYYY (למשל 06/2026), YYYY-MM, או תא תאריך של Excel.`],
     ['שדות "בפועל"', 'ברוטו/נטו בפועל, שעות נוספות מאושרות, תוספות/מענקים והערות — מהתלוש בפועל (אופציונלי).'],
@@ -683,9 +687,16 @@ export function parseWorkbook(XLSX, wb, currentState) {
       leave = { type, hours: hours ?? (type === 'training' ? (attParams?.fullDayHours ?? 0) : 0) };
     }
 
+    // חג — תא סימון חופשי בכתיבה (V / כן / TRUE / 1); כל ערך אחר נחשב "לא חג"
+    const holRaw  = String(row[C.holiday] ?? '').trim().toLowerCase();
+    const holiday = ['v', '✓', 'כן', 'חג', 'true', '1'].includes(holRaw);
+
     const training = leave?.type === 'training';
     const month = getMonth(date.slice(0, 7));
-    const dayRecord = { date, start, end, breakCode, training, present: start != null || leave != null, leave };
+    const dayRecord = {
+      date, start, end, breakCode, training, leave, holiday,
+      present: start != null || leave != null,
+    };
     const idx = month.days.findIndex(d => d.date === date);
     if (idx >= 0) month.days[idx] = dayRecord; else month.days.push(dayRecord);
   });

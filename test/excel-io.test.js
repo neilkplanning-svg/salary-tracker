@@ -131,3 +131,38 @@ test('parseWorkbook — שנה שיש לה חודשים (בגיליון "סטט�
   assert.equal(manualYearSummaries['2026'], undefined); // derived גובר — לא נכתב ל-manual
   assert.equal(inflationByYear['2026'], 0.02); // עמודת האינפלציה כן מיובאת תמיד
 });
+
+// ─── סימון חג בגיליון "נוכחות" (2026-09) ─────────────────────────────────
+
+test('parseWorkbook — עמודת "חג" מיובאת כ-holiday:true (גם בשורה ללא שעות)', () => {
+  const wb = buildWorkbookWithSheets({
+    'נוכחות': [
+      ['תאריך', 'כניסה', 'יציאה', 'קוד הפסקה', 'סוג היעדרות', 'שעות היעדרות', 'חג'],
+      ['2026-09-21', '',      '',      '', '', '', 'V'],      // חג מלא, לא עבדו
+      ['2026-09-22', '08:00', '12:00', '', '', '', 'כן'],     // חג שעבדו בו חלקית
+      ['2026-09-23', '08:00', '17:00', '', '', '', ''],       // יום רגיל
+    ],
+  });
+  const state = structuredClone(EMPTY_STATE);
+  const { months, errors } = parseWorkbook(XLSX, wb, state);
+
+  assert.deepEqual(errors, []);
+  const days = months.find(m => m.id === '2026-09').days;
+  assert.equal(days.find(d => d.date === '2026-09-21').holiday, true);
+  assert.equal(days.find(d => d.date === '2026-09-22').holiday, true);
+  assert.equal(days.find(d => d.date === '2026-09-23').holiday, false);
+});
+
+test('parseWorkbook — עמודת "חג" חסרה לגמרי (קובץ ישן) → holiday:false, ללא שגיאה', () => {
+  const wb = buildWorkbookWithSheets({
+    'נוכחות': [
+      ['תאריך', 'כניסה', 'יציאה'],
+      ['2026-09-23', '08:00', '17:00'],
+    ],
+  });
+  const state = structuredClone(EMPTY_STATE);
+  const { months, errors } = parseWorkbook(XLSX, wb, state);
+
+  assert.deepEqual(errors, []);
+  assert.equal(months[0].days[0].holiday, false);
+});

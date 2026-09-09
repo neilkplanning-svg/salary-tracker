@@ -55,6 +55,11 @@ export const STRINGS = {
     positionPotentialToDate: 'שעות אפשריות עד היום',
     positionPotentialMonth:  'שעות אפשריות בחודש',
     positionHint:      'נוכחות (כניסה→יציאה, כולל ש"נ) + היעדרות בתשלום ÷ ימי א׳–ה׳ × שעות יום מלא',
+    positionHolidays:  'ימי חג (לא נספרו)',
+    // סימון חג — יום מנוחה כמו שבת: יוצא ממניין ימי העבודה האפשריים (engine/position.js)
+    holiday:           'חג',
+    holidayMark:       'חג / יום מנוחה',
+    holidayHint:       'חג נחשב כמו שבת: אינו נספר כיום עבודה אפשרי (יוצא מהמכנה של אחוז המשרה) ואינו יוצר חיסור. עבודה בפועל בחג עדיין נספרת בשעות.',
   },
 
   estimate: {
