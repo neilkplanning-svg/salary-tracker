@@ -28,6 +28,8 @@ export const EMPTY_STATE = {
 
       // legacy / fallback (פעיל רק כשכל ה-earnings אפס — למשל golden cases ישנים)
       baseSalary: { baseConst: 0, perHourConst: 0 },
+      // מקדם legacy בלבד — מכפיל את "תוספת לשעת נוכחות" במסלול baseSalary הישן.
+      // אחוז המשרה המוצג באפליקציה אינו מוזן: הוא נגזר מהנוכחות (engine/position.js).
       positionPercent: 100,
       fixedAdditions: { phone: 0, other: 0 },
       pensionBaseFactor: 0.9895, // בסיס פנסיה = ברוטו × גורם זה — excel-formulas.md §9
@@ -78,10 +80,11 @@ export const EMPTY_STATE = {
   customDeductions: [],
   // אינפלציה שנתית מוזנת ידנית במסך היסטוריה; yearSummaries עצמו נגזר בזמן render (history.js), לא נשמר.
   inflationByYear: {},
-  // WP13.3: אחוז משרה ממוצע לשנה (100 = משרה מלאה), מוזן ידנית במסך היסטוריה — באותה תבנית
-  // כמו inflationByYear. נדרש כי אחוז המשרה בפועל נגזר מ-שעות-בפועל ÷ שעות-משרה-מלאה, ונתוני
-  // הנוכחות קיימים רק לחודשים שתועדו באפליקציה; לשנים היסטוריות אין מהיכן לחשב אותו.
-  // computeYearSummaries מעדיף תמיד את הערך מ-estimate.paramsSnapshot כשהוא קיים.
+  // אחוז משרה שנתי (100 = משרה מלאה), מוזן ידנית במסך היסטוריה — באותה תבנית כמו inflationByYear.
+  // נדרש כי אחוז המשרה האמיתי נגזר מרשת הנוכחות (engine/position.js: שעות נוכחות + היעדרות
+  // בתשלום ÷ ימי א'–ה' × שעות יום מלא), ונתוני הנוכחות קיימים רק לחודשים שתועדו באפליקציה;
+  // לשנים היסטוריות אין מהיכן לחשב אותו. computeYearSummaries מעדיף תמיד את הערך המחושב
+  // מהנוכחות כשהוא קיים, ונופל לערך הידני הזה רק לשנה ללא נוכחות מתועדת.
   positionPctByYear: {},
   // WP10.6: סיכומי שנה ידניים לשנים ללא חודשים מתועדים (למשל שנים לפני תחילת השימוש באפליקציה).
   // מפתח = 'YYYY'; כל שדה אופציונלי (הזנה חלקית) — ראו computeYearSummaries ב-history.js למיזוג

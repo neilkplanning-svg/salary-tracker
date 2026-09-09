@@ -17,6 +17,7 @@ import { store } from '../model/store.js';
 import { STRINGS } from './strings.he.js';
 import { categorizeDay } from '../engine/attendance-hours.js';
 import { calcMonthlyShortfall } from '../engine/attendance-month.js';
+import { calcMonthPosition } from '../engine/position.js';
 
 /** חודש נצפה + מצב תצוגה — שורדים re-renders (module singletons) */
 let _viewMonthId  = null;
@@ -189,6 +190,15 @@ export function render(container, state) {
     ? calcMonthlyShortfall(enriched, attParams)
     : null;
 
+  // אחוז משרה לחודש המוצג (position.js) — נגזר מהימים, לא מפרמטר ידני.
+  // asOf רק לחודש הנוכחי: חודש שהסתיים נמדד מול כל ימי העבודה שבו.
+  const position = calcMonthPosition({
+    monthId: monthId,
+    days:    allDays,
+    params:  attParams,
+    asOf:    isCurrent ? todayStr : null,
+  });
+
   const defBC = attParams?.defaultBreakCode ?? null;
   const defBCLabel = defBC != null && attParams?.breakWindows?.[defBC]
     ? _bwLabel(attParams.breakWindows[defBC])
@@ -210,6 +220,7 @@ export function render(container, state) {
       ${openDays.length ? _warnHTML(openDays) : ''}
       ${_tableHTML(enriched, todayStr)}
       ${_summaryHTML(sumReg, sumOT, sumZero, sumUnap, sumLeave)}
+      ${_positionHTML(position)}
       ${_shortfallIndicatorHTML(shortfall)}
       ${_leaveUtilHTML(state, monthId)}
     </div>
@@ -356,6 +367,40 @@ function _summaryHTML(reg, ot, zero, unap, leaveDays) {
     [STRINGS.attendance.leaveAbsent,   leaveDays + ' ימים'],
   ];
   return `<div class="card att-sum">${
+    items.map(([lbl, val]) =>
+      `<div class="att-sum-item"><span class="att-sum-lbl">${lbl}</span><strong>${val}</strong></div>`
+    ).join('')
+  }</div>`;
+}
+
+/**
+ * כרטיס אחוז משרה חודשי (engine/position.js).
+ * מוצג רק כשיש נתוני נוכחות/היעדרות בחודש — חודש ריק אינו "0% משרה" אלא "לא תועד".
+ * בחודש מתמשך מוצג גם "עד היום": המכנה נחתך בימי העבודה שחלפו, אחרת האחוז נראה נמוך
+ * מלאכותית עד סוף החודש.
+ * @param {object} position תוצאת calcMonthPosition
+ * @returns {string} HTML
+ */
+function _positionHTML(position) {
+  if (!position?.hasData || position.positionPct == null) return '';
+  const A = STRINGS.attendance;
+  // בחודש מתמשך המספר המשמעותי הוא "עד היום" — האחוז לחודש המלא עוד יעלה עם הימים שנותרו,
+  // ולכן הוא מוצג אחריו ולא לפניו.
+  const partial = position.toDate?.positionPct != null;
+  const items = [
+    ...(partial
+      ? [[A.positionToDate,  `${position.toDate.positionPct}%`],
+         [A.positionFullMonth, `${position.positionPct}%`]]
+      : [[A.positionPct,     `${position.positionPct}%`]]),
+    [A.positionPresence,  _fmtSum(position.presenceHours)],
+    [A.positionLeave,     _fmtSum(position.leaveHours)],
+    [A.positionCounted,   _fmtSum(position.countedHours)],
+    ...(partial
+      ? [[A.positionPotentialToDate, `${_fmtSum(position.toDate.potentialHours)} (${position.toDate.workDays} ימים)`],
+         [A.positionPotentialMonth,  `${_fmtSum(position.potentialHours)} (${position.workDays} ימים)`]]
+      : [[A.positionPotential,       `${_fmtSum(position.potentialHours)} (${position.workDays} ימים)`]]),
+  ];
+  return `<div class="card att-sum att-position" title="${A.positionHint}">${
     items.map(([lbl, val]) =>
       `<div class="att-sum-item"><span class="att-sum-lbl">${lbl}</span><strong>${val}</strong></div>`
     ).join('')

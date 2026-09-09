@@ -32,6 +32,7 @@ const MODULES = [
   'src/engine/overtime.js',
   'src/engine/attendance-hours.js',
   'src/engine/attendance-month.js',
+  'src/engine/position.js',
   'src/engine/defaults.js',
   'src/engine/engine.js',
   'src/model/schema.js',

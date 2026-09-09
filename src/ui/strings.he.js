@@ -44,6 +44,17 @@ export const STRINGS = {
     shortfallOk:       'מכוסה משעות אפס',
     shortfallCovered:  'נדרשו ש"נ/ללא-אישור',
     shortfallCut:      'ירידת שכר',
+    // אחוז משרה חודשי (engine/position.js) — נוכחות + היעדרות בתשלום ÷ שעות אפשריות (א'–ה')
+    positionPct:       'אחוז משרה',
+    positionToDate:    'אחוז משרה עד היום',
+    positionFullMonth: 'אחוז משרה (חודש מלא)',
+    positionPresence:  'שעות נוכחות',
+    positionLeave:     'שעות היעדרות',
+    positionCounted:   'סה"כ נספר',
+    positionPotential: 'שעות אפשריות',
+    positionPotentialToDate: 'שעות אפשריות עד היום',
+    positionPotentialMonth:  'שעות אפשריות בחודש',
+    positionHint:      'נוכחות (כניסה→יציאה, כולל ש"נ) + היעדרות בתשלום ÷ ימי א׳–ה׳ × שעות יום מלא',
   },
 
   estimate: {
@@ -153,7 +164,9 @@ export const STRINGS = {
     savingsCreditRate: 'שיעור זיכוי חסכון (סעיף 45א, %)',
     savingsCreditCap:  'תקרת הפקדה מזכה לזיכוי חסכון (₪/חודש)',
     baseSalary:        'שכר יסוד',
-    positionPct:       'אחוז משרה',
+    // שדה legacy: מכפיל את "תוספת לשעת נוכחות" במסלול baseSalary הישן בלבד. אחוז המשרה
+    // *בפועל* אינו מוזן — הוא נגזר מרשת הנוכחות (engine/position.js) ומוצג בנוכחות/היסטוריה.
+    positionPct:       'אחוז משרה (מקדם legacy)',
     creditPoints:      'נקודות זיכוי',
     pensionRate:       'שיעור פנסיה (עובד)',
     pensionRate2:      'שיעור פנסיה שנייה (נלווים)',
@@ -297,7 +310,14 @@ export const STRINGS = {
     netChange: 'שינוי נטו',
     inflation: 'אינפלציה (%)',
     netToGross: 'יחס נטו/ברוטו',
-    avgPosition: 'ממוצע אחוז משרה',
+    // אחוז משרה — נגזר מרשת הנוכחות (engine/position.js): Σ שעות שנספרו ÷ Σ שעות אפשריות
+    avgPosition: 'אחוז משרה שנתי',
+    positionCounted:     'שעות שנספרו',
+    positionPotential:   'שעות אפשריות',
+    positionToDate:      'עד היום (חודש מתמשך)',
+    positionManualTag:   '(הוזן ידנית)',
+    positionComputedHint:'מחושב מהנוכחות',
+    positionPartialNote: '* אחוז משרה עד היום — החודש טרם הסתיים, ולכן נספרו רק ימי העבודה שחלפו.',
     unpaidHours: 'שעות ללא אישור',
     month: 'חודש',
     // כותרות ניטרליות: המקור מסומן בתא עצמו ("(בפועל)"), ומאז WP10.1 רוב הערכים מגיעים

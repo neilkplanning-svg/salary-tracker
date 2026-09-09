@@ -104,7 +104,7 @@ export function render(container, state) {
   container.innerHTML = `
     <div class="est-screen">
       ${_navHTML(monthId, y, m)}
-      ${_hoursHTML(sumReg, sumOT, sumZero, sumUnap, cap, attParams != null)}
+      ${_hoursHTML(sumReg, sumOT, sumZero, sumUnap, cap, attParams != null, result)}
       ${_shortfallHTML(result)}
       ${_breakdownHTML(result, state.settings.personal, aidFundRepayment, customDeductionsList.filter(cd => isActiveInMonth(cd, monthId)))}
       ${_snapshotHTML(snapshot, stale)}
@@ -162,7 +162,7 @@ function _navHTML(monthId, y, m) {
     </div>`;
 }
 
-function _hoursHTML(sumReg, sumOT, sumZero, sumUnap, cap, hasComputed) {
+function _hoursHTML(sumReg, sumOT, sumZero, sumUnap, cap, hasComputed, result = null) {
   const usedOT   = cap != null ? Math.min(sumOT, cap) : sumOT;
   const capped   = cap != null && sumOT > cap;
   return `
@@ -201,6 +201,11 @@ function _hoursHTML(sumReg, sumOT, sumZero, sumUnap, cap, hasComputed) {
         <div class="est-h-row">
           <span class="est-h-lbl" style="color:var(--color-warning)">ש"נ לחישוב (מוגבל למכסה)</span>
           <span class="est-h-val" style="color:var(--color-warning)">${usedOT.toFixed(1)} ש׳</span>
+        </div>` : ''}
+        ${result?.positionPct != null ? `
+        <div class="est-h-row">
+          <span class="est-h-lbl" title="${STRINGS.attendance.positionHint}">${STRINGS.attendance.positionPct}</span>
+          <span class="est-h-val" title="${STRINGS.history.positionCounted}: ${result.positionCountedHours} ש׳ ÷ ${STRINGS.history.positionPotential}: ${result.positionPotentialHours} ש׳">${result.positionPct}%</span>
         </div>` : ''}
       </div>
     </div>`;

@@ -4,7 +4,7 @@
  * Output: estimate — { gross, incomeTax, nationalInsurance, healthTax,
  *                      pension, pension2, pensionSavingsCredit, trainingFund, creditCredit,
  *                      net, netAfterReductions, overtimePay, pensionBase, trainingFundBase, niBase,
- *                      trainingComplement, standbyPay, presenceDays, computedAt, paramsSnapshot }
+ *                      trainingComplement, standbyPay, presenceDays, positionPct, computedAt, paramsSnapshot }
  * Deps: overtime.js, defaults.js
  *
  * שני מסלולי חישוב:
@@ -19,6 +19,7 @@ import { calcOvertime } from './overtime.js';
 import { resolveEarningFlags } from './defaults.js';
 import { categorizeDay } from './attendance-hours.js';
 import { calcMonthlyShortfall } from './attendance-month.js';
+import { calcMonthPosition } from './position.js';
 
 /**
  * חישוב מס הכנסה לפי מדרגות שולי (משחזר V6:V12 מהאקסל — excel-formulas.md §6),
@@ -262,6 +263,15 @@ export function calculate({ national, personal, month, reductions = null, aidFun
     trainingComplement = 0;
   }
 
+  // === אחוז משרה (position.js) — נגזר מרשת הימים בלבד, לא מפרמטר ידני.
+  // נשמר ב-snapshot כדי שמסך ההיסטוריה יוכל להציג אחוז משרה גם לחודש שרשת הימים שלו
+  // נמחקה/נערכה מאוחר יותר. חודש ללא id (golden cases) → potentialHours=0 → positionPct=null.
+  const position = calcMonthPosition({
+    monthId: month.id ?? null,
+    days:    rawDays,
+    params:  attParams,
+  });
+
   // === שלב 11: נטו לאחר הפחתות ===
   const redFromRegular  = reductions?.fromRegular   ?? 0;
   const redFromOvertime = reductions?.fromOvertime   ?? 0;
@@ -291,6 +301,11 @@ export function calculate({ national, personal, month, reductions = null, aidFun
     trainingComplement: round2(trainingComplement ?? 0),
     niBase:             round2(niBase),
     overtimeApprovedHours: round2(approvedOT),
+    // אחוז משרה בפועל לחודש — ראו position.js (שעות נוכחות+היעדרות ÷ שעות אפשריות א'–ה')
+    positionPct:            position.positionPct,
+    positionCountedHours:   position.countedHours,
+    positionPotentialHours: position.potentialHours,
+    positionWorkDays:       position.workDays,
     // WP8.2: נתוני השלמת חיסורים חודשית
     shortfallComputed:     hasComputedDays,
     salaryCutHours:        round2(shortfall.salaryCutHours),

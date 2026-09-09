@@ -208,65 +208,171 @@ test('computeYearSummaries — additionsGross הוא undefined (ריק) לשנה
   assert.equal(summary.bonusesGross, 5000); // בונוסים ידניים — כרגיל, לא חסום
 });
 
-// ─── WP13.3 — אחוז משרה, מענקים (ממוצע + שינוי), ושנה ראשונה ללא "0%" מטעה ───
+// ─── אחוז משרה: נגזר מהנוכחות (position.js), עם נפילה לערך שנתי ידני ───────────
+//
+// ההגדרה: Σ (שעות נוכחות + היעדרות בתשלום) ÷ Σ (ימי א'–ה' × fullDayHours) של חודשי השנה —
+// ולא ממוצע האחוזים החודשיים. הבדיקות מעבירות asOf קבוע כדי שלא יהיו תלויות בתאריך ההרצה.
 
-test('WP13.3 — avgPositionPct מ-snapshot מחושב רק על חודשים שיש בהם ערך (לא משלים 100 לחודש חסר)', () => {
+/** יום נוכחות מלא 06:30→15:24 (8.9 ש׳ = fullDayHours ברירת המחדל) */
+function fullDay(date) {
+  return { date, start: '06:30', end: '15:24', breakCode: null, leave: null, training: false };
+}
+
+/** יום חופשה מלא (leave.hours = fullDayHours, כפי שממלא "השלם ליום מלא") */
+function vacationDay(date) {
+  return { date, start: null, end: null, breakCode: null, leave: { type: 'vacation', hours: 8.9 }, training: false };
+}
+
+const AS_OF = '2026-12-31'; // אחרי כל החודשים בבדיקות — אין חיתוך "עד היום"
+
+test('אחוז משרה — חודש שכולו ימי נוכחות מלאים = 100%', () => {
   const doc = structuredClone(EMPTY_STATE);
-  const withPos = pct => ({
-    gross: 10000, net: 8000,
-    paramsSnapshot: { national: {}, personal: { positionPercent: pct } },
-  });
-  doc.months.push(monthDoc('2026-01', { estimate: withPos(120) }));
-  doc.months.push(monthDoc('2026-02', { estimate: withPos(80) }));
-  doc.months.push(monthDoc('2026-03', { estimate: { gross: 10000, net: 8000 } })); // ללא snapshot
+  // ינואר 2026: 21 ימי א׳–ה׳. ממלאים את כולם ביום מלא.
+  const days = [];
+  for (let i = 1; i <= 31; i++) {
+    const date = `2026-01-${String(i).padStart(2, '0')}`;
+    const dow = new Date(date + 'T12:00:00Z').getDay();
+    if (dow !== 5 && dow !== 6) days.push(fullDay(date));
+  }
+  const m = monthDoc('2026-01');
+  m.days = days;
+  doc.months.push(m);
 
-  const [summary] = computeYearSummaries(doc);
-  // ממוצע על שני החודשים בלבד: (120+80)/2 = 100. הקוד הישן היה מחשב (120+80+100)/3 = 100 במקרה,
-  // אבל (120+80+100)/3 שונה מ-(120+80)/2 בכל מקרה שאינו סימטרי — ראו הבדיקה הבאה.
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
   assert.equal(summary.avgPositionPct, 100);
-  assert.equal(summary.positionSource, 'snapshot');
+  assert.equal(summary.positionSource, 'computed');
 });
 
-test('WP13.3 — חודש ללא snapshot אינו נספר כ-100% (הטיה שתוקנה)', () => {
+test('אחוז משרה — חופשה נספרת כשעות עבודה (חצי החודש נוכחות + חצי חופשה = 100%)', () => {
   const doc = structuredClone(EMPTY_STATE);
-  doc.months.push(monthDoc('2026-01', {
-    estimate: { gross: 10000, net: 8000, paramsSnapshot: { national: {}, personal: { positionPercent: 50 } } },
-  }));
-  doc.months.push(monthDoc('2026-02', { estimate: { gross: 10000, net: 8000 } }));
+  const days = [];
+  let n = 0;
+  for (let i = 1; i <= 31; i++) {
+    const date = `2026-01-${String(i).padStart(2, '0')}`;
+    const dow = new Date(date + 'T12:00:00Z').getDay();
+    if (dow === 5 || dow === 6) continue;
+    days.push(n++ % 2 === 0 ? fullDay(date) : vacationDay(date));
+  }
+  const m = monthDoc('2026-01');
+  m.days = days;
+  doc.months.push(m);
 
-  const [summary] = computeYearSummaries(doc);
-  assert.equal(summary.avgPositionPct, 50); // ולא (50+100)/2 = 75
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
+  assert.equal(summary.avgPositionPct, 100);
 });
 
-test('WP13.3 — avgPositionPct נופל ל-positionPctByYear כשאין ולו snapshot אחד, ומסומן source:"manual"', () => {
+test('אחוז משרה — חצי מימי העבודה בלבד ≈ 50%', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  const days = [];
+  let n = 0;
+  for (let i = 1; i <= 31; i++) {
+    const date = `2026-01-${String(i).padStart(2, '0')}`;
+    const dow = new Date(date + 'T12:00:00Z').getDay();
+    if (dow === 5 || dow === 6) continue;
+    if (n++ % 2 === 0) days.push(fullDay(date)); // רק חצי מהימים תועדו כנוכחות
+  }
+  const m = monthDoc('2026-01');
+  m.days = days;
+  doc.months.push(m);
+
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
+  // 11 ימי נוכחות מתוך 21 ימי עבודה אפשריים
+  assert.equal(summary.avgPositionPct, +((11 / 21) * 100).toFixed(2));
+});
+
+test('אחוז משרה שנתי — סכום שעות ÷ סכום שעות אפשריות, לא ממוצע האחוזים החודשיים', () => {
+  const doc = structuredClone(EMPTY_STATE);
+
+  // ינואר: יום נוכחות אחד בלבד (21 ימי עבודה במכנה)
+  const jan = monthDoc('2026-01');
+  jan.days = [fullDay('2026-01-05')];
+  doc.months.push(jan);
+
+  // פברואר: כל 20 ימי העבודה
+  const feb = monthDoc('2026-02');
+  feb.days = [];
+  for (let i = 1; i <= 28; i++) {
+    const date = `2026-02-${String(i).padStart(2, '0')}`;
+    const dow = new Date(date + 'T12:00:00Z').getDay();
+    if (dow !== 5 && dow !== 6) feb.days.push(fullDay(date));
+  }
+  doc.months.push(feb);
+
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
+  const expected = +(((1 + 20) / (21 + 20)) * 100).toFixed(2); // 51.22%
+  assert.equal(summary.avgPositionPct, expected);
+  // ממוצע האחוזים החודשיים היה נותן (4.76 + 100) / 2 ≈ 52.38 — לא זה מה שביקשנו
+  assert.notEqual(summary.avgPositionPct, 52.38);
+});
+
+test('אחוז משרה — חודש מתועד ללא שעות כלל אינו מדלל את השנה', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  const jan = monthDoc('2026-01');
+  jan.days = [fullDay('2026-01-05'), fullDay('2026-01-06')];
+  doc.months.push(jan);
+  doc.months.push(monthDoc('2026-02')); // חודש ריק (למשל רק תלוש בפועל הוזן) — לא נספר
+
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
+  assert.equal(summary.avgPositionPct, +((2 / 21) * 100).toFixed(2));
+});
+
+test('אחוז משרה — עבודה בשישי נספרת במונה אך שישי אינו במכנה (מעל 100% אפשרי)', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  const days = [];
+  for (let i = 1; i <= 31; i++) {
+    const date = `2026-01-${String(i).padStart(2, '0')}`;
+    const dow = new Date(date + 'T12:00:00Z').getDay();
+    if (dow !== 5 && dow !== 6) days.push(fullDay(date));
+  }
+  days.push({ date: '2026-01-02', start: '06:30', end: '10:30', breakCode: -1, leave: null, training: false }); // שישי
+  const m = monthDoc('2026-01');
+  m.days = days;
+  doc.months.push(m);
+
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
+  assert.ok(summary.avgPositionPct > 100, `צפוי מעל 100%, קיבלנו ${summary.avgPositionPct}`);
+});
+
+test('אחוז משרה — נופל ל-positionPctByYear כשאין נוכחות מתועדת, ומסומן source:"manual"', () => {
   const doc = structuredClone(EMPTY_STATE);
   doc.months.push(monthDoc('2019-01', { actual: { gross: 10000, net: 8000 } }));
   doc.positionPctByYear = { '2019': 111.37 };
 
-  const [summary] = computeYearSummaries(doc);
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
   assert.equal(summary.avgPositionPct, 111.37);
   assert.equal(summary.positionSource, 'manual');
 });
 
-test('WP13.3 — snapshot גובר על positionPctByYear כששניהם קיימים', () => {
+test('אחוז משרה — הנוכחות המחושבת גוברת על positionPctByYear כששניהם קיימים', () => {
   const doc = structuredClone(EMPTY_STATE);
-  doc.months.push(monthDoc('2026-01', {
-    estimate: { gross: 10000, net: 8000, paramsSnapshot: { national: {}, personal: { positionPercent: 90 } } },
-  }));
+  const m = monthDoc('2026-01');
+  m.days = [fullDay('2026-01-05')];
+  doc.months.push(m);
   doc.positionPctByYear = { '2026': 111.37 };
 
-  const [summary] = computeYearSummaries(doc);
-  assert.equal(summary.avgPositionPct, 90);
-  assert.equal(summary.positionSource, 'snapshot');
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
+  assert.equal(summary.positionSource, 'computed');
+  assert.notEqual(summary.avgPositionPct, 111.37);
 });
 
-test('WP13.3 — avgPositionPct הוא undefined (—) כשאין לא snapshot ולא ערך שנתי', () => {
+test('אחוז משרה — undefined (—) כשאין לא נוכחות ולא ערך שנתי ידני', () => {
   const doc = structuredClone(EMPTY_STATE);
   doc.months.push(monthDoc('2019-01', { actual: { gross: 10000, net: 8000 } }));
 
-  const [summary] = computeYearSummaries(doc);
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
   assert.equal(summary.avgPositionPct, undefined);
   assert.equal(summary.positionSource, null);
+});
+
+test('אחוז משרה — שנה ידנית-בלבד לוקחת את הערך השנתי הידני (positionPctByYear)', () => {
+  const doc = structuredClone(EMPTY_STATE);
+  doc.manualYearSummaries = { '2018': { totalGross: 100000, totalNet: 80000 } };
+  doc.positionPctByYear   = { '2018': 90 };
+
+  const [summary] = computeYearSummaries(doc, { asOf: AS_OF });
+  assert.equal(summary.source, 'manual');
+  assert.equal(summary.avgPositionPct, 90);
+  assert.equal(summary.positionSource, 'manual');
 });
 
 test('WP13.3 — avgMonthlyBonuses מחלק במספר החודשים המתועדים', () => {

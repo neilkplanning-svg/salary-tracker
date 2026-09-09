@@ -37,7 +37,8 @@
         "perHourConst": 0,          // קבוע לשעה
         "adjustFactor": 1           // גורם התאמה
       },
-      "positionPercent": 100,       // אחוז משרה
+      "positionPercent": 100,       // מקדם legacy למסלול baseSalary בלבד — אינו אחוז המשרה המוצג
+                                     // באפליקציה (זה נגזר מהנוכחות; ראו engine/position.js)
       "creditPointsQty": 2.25,      // מספר נקודות זיכוי
       "pensionRateEmployee": 0.06,  // שיעור פנסיה עובד
       "trainingFundRateEmployee": 0.025,
@@ -91,6 +92,10 @@
         "otherDeductions":    0,
         "net":                0,
         "netAfterReductions": 0,
+        "positionPct":            0,       // אחוז משרה בפועל לחודש (engine/position.js) — null כשאין מכנה
+        "positionCountedHours":   0,       // שעות נוכחות + היעדרות בתשלום שנספרו
+        "positionPotentialHours": 0,       // ימי א׳–ה׳ × fullDayHours
+        "positionWorkDays":       0,
         "computedAt":         "ISO-8601",
         "paramsSnapshot":     {}           // snapshot של settings בעת חישוב
       },
@@ -178,6 +183,19 @@
 - **`yearSummaries` אינו נשמר ב-JSON** — נגזר (derived) בזמן `render()` ב-`src/ui/history.js` מתוך `months[]`, כדי שצפייה בהיסטוריה לא תעדכן את `appMeta.lastModified` (WP9.1 §1.2). הערך היחיד שנשמר בפועל הוא `inflationByYear` — מפת שנה→אחוז אינפלציה, נערכת ידנית במסך ההיסטוריה.
 - **`computeYearSummaries` הוא actual-first** (WP10.1): לכל חודש, `totalGross`/`totalNet` (וכל מה שנגזר מהם — ממוצעים, `netToGrossRatio`, `incomeChangePct`/`netChangePct`, הגרפים, וגיליון "היסטוריה שנתית" בייצוא Excel) לוקחים את `month.actual.gross`/`month.actual.net` כשקיימים (כלומר לא `null`), ונופלים חזרה ל-`month.estimate.gross`/`month.estimate.net` אחרת — בדיקה זו נעשית **בנפרד לכל שדה** (`??`, לא `||`), כי `actual.gross`/`actual.net` עשויים להיות `null` בנפרד זה מזה כשהוזן רק אחד מהם (ראו `src/ui/actual.js`). עמודת "שעות נוספות" בטבלה החודשית ממשיכה להציג את `estimate.overtimePay` בלבד (ל-`actual` יש רק שעות נוספות מאושרות, לא תשלום). ה-snapshot של `month.estimate` עצמו אינו משתנה ואינו מחושב מחדש — רק תצוגת ההיסטוריה הנגזרת.
 - **סה"כ המענקים הרבעוניים (`bonusesGross`) מגיע מ-`month.reductions.quarterlyBonus`** (מסך "הפחתות", `src/ui/reductions.js`) ולא מהמערך `temporaryReductions` ברמת ה-state העליונה — שדה זה קיים ב-schema אך שום מסך לא כותב אליו בפועל.
+
+## אחוז משרה — נגזר מהנוכחות (positionPctByYear כ-fallback)
+- **אחוז המשרה אינו שדה קלט.** הוא נגזר ב-`src/engine/position.js` מרשת הנוכחות: (שעות נוכחות
+  כניסה→יציאה, כולל ש"נ + שעות חופשה/מחלה/השתלמות) ÷ (ימי א׳–ה׳ בחודש × `attendanceParams.fullDayHours`).
+  ההגדרה המלאה: `docs/calculation-guide.md` §2.3.
+- ברמת השנה זהו **יחס הסכומים** של חודשי השנה (`calcYearPosition`), לא ממוצע האחוזים החודשיים.
+  חודש ללא נתוני נוכחות אינו נספר כלל — לא במונה ולא במכנה.
+- `months[].estimate` נושא את הערך שחושב בעת "שמור תמונה" (`positionPct` + שברי החישוב) — לתיעוד
+  ולנפילה-לאחור (`monthPositionOf`) כשרשת הימים של אותו חודש ריקה.
+- **`positionPctByYear[year]`** (שדה רמת-שורש, מפתח `'YYYY'`) — אחוז משרה שנתי שהוזן ידנית במסך
+  היסטוריה. משמש **רק** לשנה שאין בה ולו חודש אחד עם נתוני נוכחות (שנים שקדמו לשימוש באפליקציה);
+  הערך המחושב מהנוכחות תמיד גובר. לא קיים במסמכים ישנים — הגישה אליו היא `state.positionPctByYear ?? {}`.
+- **`settings.personal.positionPercent`** הוא שדה אחר לגמרי: מקדם במסלול השכר legacy בלבד.
 
 ## סיכומי שנה ידניים — manualYearSummaries (WP10.6)
 - מטרה: לאפשר תיעוד שנים היסטוריות שקדמו לשימוש באפליקציה (אין להן חודשים ב-`months[]`), כולל הזנה חלקית (רק חלק מהשדות).

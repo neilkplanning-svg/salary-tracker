@@ -30,6 +30,7 @@ import { store } from '../model/store.js';
 import { STRINGS } from '../ui/strings.he.js';
 import { categorizeDay } from '../engine/attendance-hours.js';
 import { computeYearSummaries } from '../ui/history.js';
+import { monthPositionOf } from '../engine/position.js';
 
 const IO = STRINGS.io;
 
@@ -105,7 +106,7 @@ const C = {
   hAvgGrossPlain:  'ממוצע ברוטו חודשי',
   hAvgNetPlain:    'ממוצע נטו חודשי',
   hAdditionsPlain: 'סה"כ תוספות קבועות',
-  hAvgPosition:    'ממוצע אחוז משרה',
+  hAvgPosition:    'אחוז משרה שנתי',
   hGrossChange:    'שינוי ברוטו (%)',
   hNetChange:      'שינוי נטו (%)',
   hAvgBonuses:     'ממוצע מענקים חודשי',
@@ -347,6 +348,11 @@ function buildHistoryYearRows(state) {
  * יגיע מהתלוש והנטו מהמשוער באותו חודש עצמו.
  */
 function buildHistoryMonthRows(state) {
+  const attParams = state.settings?.national?.attendanceParams ?? null;
+  // אותו asOf כמו במסך ההיסטוריה — החודש המתמשך מיוצא לפי "עד היום", כדי שהמספר בקובץ
+  // יהיה זהה למספר שעל המסך ולא ייראה נמוך מלאכותית
+  const now = new Date();
+  const asOf = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   return (state.months || [])
     .filter(m => m.actual?.gross != null || m.actual?.net != null || m.estimate?.gross != null)
     .slice()
@@ -362,9 +368,22 @@ function buildHistoryMonthRows(state) {
         [C.mNet]:         r2OrBlank(m.actual?.net ?? m.estimate?.net),
         [C.mNetSource]:   netFromActual ? 'בפועל' : (m.estimate?.net != null ? 'משוער' : ''),
         [C.mBonuses]:     r2OrBlank(m.actual?.bonuses),
-        [C.mPosition]:    r2OrBlank(m.estimate?.paramsSnapshot?.personal?.positionPercent),
+        // אחוז משרה נגזר מרשת הנוכחות (position.js), לא מהפרמטר הידני שבהגדרות
+        [C.mPosition]:    r2OrBlank(_monthPositionPct(m, attParams, asOf)),
       };
     });
+}
+
+/**
+ * אחוז המשרה של חודש לייצוא: החודש המתמשך נמדד "עד היום" (כמו במסך), חודש שהסתיים —
+ * מול כל ימי העבודה שבו. null לחודש ללא נתוני נוכחות → תא ריק (ולא 0).
+ * @param {object} month @param {object|null} attParams @param {string} asOf
+ * @returns {number|null}
+ */
+function _monthPositionPct(month, attParams, asOf) {
+  const pos = monthPositionOf(month, attParams, asOf);
+  if (!pos.hasData) return null;
+  return (pos.toDate ?? pos).positionPct;
 }
 
 /**

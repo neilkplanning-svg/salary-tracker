@@ -1,18 +1,26 @@
 /**
  * history.js — מסך היסטוריה: תצוגה חודשית/שנתית, yearSummaries
  * Input: state  Output: DOM מסך היסטוריה
- * Deps: store.js, strings.he.js, engine/defaults.js (EARNING_COMPONENTS — קטלוג בלבד, אין שימוש במנוע)
+ * Deps: store.js, strings.he.js, engine/defaults.js (EARNING_COMPONENTS — קטלוג בלבד, אין שימוש במנוע),
+ *       engine/position.js (אחוז משרה — נגזר מרשת הנוכחות)
  */
 
 import { store } from '../model/store.js';
 import { STRINGS, formatCurrency } from './strings.he.js';
 import { renderChart } from './charts.js';
 import { EARNING_COMPONENTS } from '../engine/defaults.js';
+import { calcYearPosition, monthPositionOf } from '../engine/position.js';
 // ייבוא דינמי (lazy) — SheetJS נטען רק בלחיצה על "ייצוא ל-Excel", לא בכל render של המסך
 const loadExcelIO = () => import('../io/excel-io.js');
 
 const S = STRINGS.history;
 const toPct = v => +(Number(v || 0) * 100).toFixed(2);
+
+/** תאריך היום 'YYYY-MM-DD' (מקומי) — החודש/השנה המתמשכים נספרים עד היום, לא עד סוף החודש */
+function _todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 /**
  * מציג ערך חודשי בטבלה עם ציון מקור (בפועל/משוער) — actual-first לפי שדה.
@@ -63,6 +71,24 @@ function _changeBox(label, pct) {
   </div>`;
 }
 
+/**
+ * ערך כרטיס "אחוז משרה שנתי": האחוז + מאיפה הגיע. במצב 'computed' מוצג ה-tooltip עם
+ * שברי החישוב (שעות שנספרו ÷ שעות אפשריות) כדי שהמספר יהיה בר-אימות בלי לפתוח את הקוד.
+ * @param {object} sum סיכום שנה
+ * @returns {string} HTML
+ */
+function _positionValueHTML(sum) {
+  if (sum.avgPositionPct == null) return S.emptyField;
+  const pct = +sum.avgPositionPct.toFixed(2);
+  if (sum.positionSource === 'manual') {
+    return `${pct}% <span class="hint" style="font-size:0.7rem">${S.positionManualTag}</span>`;
+  }
+  const title = sum.positionCountedHours != null
+    ? `${S.positionCounted}: ${sum.positionCountedHours} ש׳ ÷ ${S.positionPotential}: ${sum.positionPotentialHours} ש׳`
+    : '';
+  return `<span title="${title}">${pct}%</span>`;
+}
+
 /** מפה id→group מהקטלוג הקבוע, לסיווג "תוספות" (group !== 'base') — קטלוג בלבד, לא מנוע חישוב */
 const _EARNING_GROUP_BY_ID = new Map(EARNING_COMPONENTS.map(c => [c.id, c.group]));
 
@@ -100,18 +126,18 @@ function _monthAdditionsFromSnapshot(estimate) {
  * @param {object[]} months חודשי השנה
  * @param {object|null} prevYearSummary סיכום השנה הקודמת (ל-incomeChangePct/netChangePct)
  * @param {number} inflationPct
- * @param {number|undefined} storedPositionPct אחוז משרה שנתי שהוזן ידנית (WP13.3) — fallback
- *   כשאין ולו חודש אחד עם positionPercent ב-estimate.paramsSnapshot
+ * @param {number|undefined} storedPositionPct אחוז משרה שנתי שהוזן ידנית — fallback לשנים
+ *   היסטוריות שאין להן רשת נוכחות באפליקציה (ראו positionPctByYear ב-schema.js)
+ * @param {object|null} attParams settings.national.attendanceParams — לחישוב אחוז המשרה
+ * @param {string|null} asOf 'YYYY-MM-DD' — שנה מתמשכת: החודש הנוכחי נספר עד תאריך זה
  * @returns {object} סיכום שנה עם source:'derived'
  */
-function _computeDerivedYear(year, months, prevYearSummary, inflationPct, storedPositionPct) {
+function _computeDerivedYear(year, months, prevYearSummary, inflationPct, storedPositionPct, attParams, asOf) {
   let totalGross = 0;
   let totalNet = 0;
   let bonusesGross = 0;
   let bonusesNet = 0;
   let additionsGross = 0;
-  let totalPosition = 0;
-  let positionMonths = 0; // WP13.3 — רק חודשים עם snapshot; ראו הערה ב-avgPositionPct למטה
   let unpaidHours = 0;
 
   for (const m of months) {
@@ -127,11 +153,6 @@ function _computeDerivedYear(year, months, prevYearSummary, inflationPct, stored
     // WP10.7: תוספות קבועות — נקרא רק מ-estimate.paramsSnapshot השמור (כלל #6, אין חישוב מחדש)
     additionsGross += _monthAdditionsFromSnapshot(m.estimate);
 
-    // WP13.3: נספר רק כשיש ערך ב-snapshot. הקוד הקודם השלים 100 לכל חודש חסר (`|| 100`)
-    // והטה את הממוצע כלפי מעלה — חודש בלי "שמור תמונה" נראה כמשרה מלאה.
-    const pos = m.estimate?.paramsSnapshot?.personal?.positionPercent;
-    if (pos != null) { totalPosition += pos; positionMonths++; }
-
     for (const d of (m.days || [])) {
       unpaidHours += (d.zeroHours || 0) + (d.unapprovedHours || 0);
     }
@@ -141,9 +162,13 @@ function _computeDerivedYear(year, months, prevYearSummary, inflationPct, stored
   const avgMonthlyGross = count ? totalGross / count : 0;
   const avgMonthlyNet = count ? totalNet / count : 0;
   const avgMonthlyBonuses = count ? bonusesGross / count : 0;
-  // snapshot גובר; אחרת הערך השנתי שהוזן ידנית; אחרת undefined — "לא ידוע" אינו "0% משרה"
-  const avgPositionPct = positionMonths ? totalPosition / positionMonths : storedPositionPct;
-  const positionSource = positionMonths ? 'snapshot' : (storedPositionPct != null ? 'manual' : null);
+
+  // אחוז משרה שנתי — Σ שעות שנספרו ÷ Σ שעות אפשריות של חודשי השנה (position.js), ולא ממוצע
+  // האחוזים החודשיים. נגזר מרשת הנוכחות; הערך הידני (positionPctByYear) הוא fallback בלבד
+  // לשנים היסטוריות שאין להן נוכחות מתועדת. אחרת undefined — "לא ידוע" אינו "0% משרה".
+  const yearPosition = calcYearPosition({ year, months, params: attParams, asOf });
+  const avgPositionPct = yearPosition.hasData ? yearPosition.positionPct : storedPositionPct;
+  const positionSource = yearPosition.hasData ? 'computed' : (storedPositionPct != null ? 'manual' : null);
   const netToGrossRatio = totalGross ? totalNet / totalGross : 0;
 
   // WP13.3: undefined לשנה הראשונה (אין בסיס השוואה) — קודם אותחל ל-0 והוצג "0%" מטעה.
@@ -177,6 +202,10 @@ function _computeDerivedYear(year, months, prevYearSummary, inflationPct, stored
     netToGrossRatio,
     avgPositionPct,
     positionSource,
+    // פירוט אחוז המשרה — לתצוגת "איך זה חושב" ולייצוא (ריק כשהאחוז ידני/חסר)
+    positionCountedHours:   yearPosition.hasData ? yearPosition.countedHours   : undefined,
+    positionPotentialHours: yearPosition.hasData ? yearPosition.potentialHours : undefined,
+    positionMonthsCounted:  yearPosition.hasData ? yearPosition.monthsCounted  : undefined,
     unpaidHours,
   };
 }
@@ -189,9 +218,10 @@ function _computeDerivedYear(year, months, prevYearSummary, inflationPct, stored
  * @param {object} manual { totalGross?, totalNet?, bonusesGross?, monthsCount?, notes? }
  * @param {object|null} prevYearSummary
  * @param {number} inflationPct
+ * @param {number|undefined} storedPositionPct אחוז משרה שנתי שהוזן ידנית (positionPctByYear)
  * @returns {object} סיכום שנה עם source:'manual'
  */
-function _computeManualYear(year, manual, prevYearSummary, inflationPct) {
+function _computeManualYear(year, manual, prevYearSummary, inflationPct, storedPositionPct) {
   const { totalGross, totalNet, bonusesGross, monthsCount, notes } = manual || {};
 
   const avgMonthlyGross = (monthsCount && totalGross != null) ? totalGross / monthsCount : undefined;
@@ -220,7 +250,9 @@ function _computeManualYear(year, manual, prevYearSummary, inflationPct) {
     avgMonthlyGross,
     avgMonthlyNet,
     avgMonthlyBonuses,
-    avgPositionPct: undefined, // אין snapshot — אחוז המשרה אינו ידוע לשנה ידנית (WP13.3)
+    // לשנה ידנית אין רשת נוכחות לחשב ממנה — האחוז מגיע מהערך השנתי הידני, אם הוזן
+    avgPositionPct: storedPositionPct,
+    positionSource: storedPositionPct != null ? 'manual' : null,
     monthsCount,
     notes,
     incomeChangePct,
@@ -240,7 +272,7 @@ function _computeManualYear(year, manual, prevYearSummary, inflationPct) {
  * @param {object} state
  * @returns {Array} yearSummaries לתצוגה בלבד, ממוין עולה לפי שנה
  */
-export function computeYearSummaries(state) {
+export function computeYearSummaries(state, { asOf = _todayISO() } = {}) {
   const monthsByYear = {};
   for (const m of (state.months || [])) {
     const year = parseInt(m.id.split('-')[0], 10);
@@ -248,6 +280,7 @@ export function computeYearSummaries(state) {
     monthsByYear[year].push(m);
   }
 
+  const attParams = state.settings?.national?.attendanceParams ?? null;
   const inflationByYear = state.inflationByYear || {};
   const positionByYear = state.positionPctByYear ?? {};
   const manualByYear = state.manualYearSummaries ?? {};
@@ -265,9 +298,13 @@ export function computeYearSummaries(state) {
 
     if (monthsByYear[year]) {
       // derived תמיד גובר — שנה עם months אינה נדרסת ע"י manualYearSummaries גם אם קיים לה ערך שם
-      summaries.push(_computeDerivedYear(year, monthsByYear[year], prevYearSummary, inflationPct, positionByYear[year]));
+      summaries.push(_computeDerivedYear(
+        year, monthsByYear[year], prevYearSummary, inflationPct, positionByYear[year], attParams, asOf,
+      ));
     } else {
-      summaries.push(_computeManualYear(year, manualByYear[year], prevYearSummary, inflationPct));
+      summaries.push(_computeManualYear(
+        year, manualByYear[year], prevYearSummary, inflationPct, positionByYear[year],
+      ));
     }
   }
   return summaries;
@@ -299,7 +336,10 @@ function _wireChartBreakpoint(container, summaries) {
 }
 
 export function render(container, state) {
-  const summaries = computeYearSummaries(state);
+  // asOf יחיד לכל הרנדר — כדי שכרטיס השנה וטבלת החודשים יחתכו את החודש המתמשך באותו תאריך
+  const asOf = _todayISO();
+  const attParams = state.settings?.national?.attendanceParams ?? null;
+  const summaries = computeYearSummaries(state, { asOf });
 
   const monthsByYear = {};
   for (const m of (state.months || [])) {
@@ -374,8 +414,7 @@ export function render(container, state) {
           ${_statBox(S.avgGross,   _optCurrency(sum.avgMonthlyGross))}
           ${_statBox(S.avgNet,     _optCurrency(sum.avgMonthlyNet))}
 
-          ${_statBox(S.avgPosition, sum.avgPositionPct == null ? S.emptyField
-              : `${(+sum.avgPositionPct.toFixed(2))}%${sum.positionSource === 'manual' ? ' <span class="hint" style="font-size:0.7rem">(הוזן)</span>' : ''}`)}
+          ${_statBox(S.avgPosition, _positionValueHTML(sum))}
           ${_changeBox(S.incomeChange, sum.incomeChangePct)}
           ${_changeBox(S.netChange,    sum.netChangePct)}
           ${_statBox(S.netToGross, _optPct(sum.netToGrossRatio))}
@@ -393,15 +432,13 @@ export function render(container, state) {
             <span>${S.inflation}</span>
             <input type="number" step="0.1" name="inflation" value="${toPct(sum.inflationPct)}" />
           </label>
-          ${isManual ? '' : `
-            <label class="field" style="width:170px; margin-bottom:0;">
-              <span>${S.avgPosition}</span>
-              <input type="number" step="0.01" min="0" name="positionPct"
-                     value="${sum.positionSource === 'snapshot' ? '' : (state.positionPctByYear?.[sum.year] ?? '')}"
-                     ${sum.positionSource === 'snapshot' ? 'disabled' : ''}
-                     placeholder="${sum.positionSource === 'snapshot' ? 'מחושב מהתמונות' : '100'}" />
-            </label>
-          `}
+          <label class="field" style="width:190px; margin-bottom:0;">
+            <span>${S.avgPosition}</span>
+            <input type="number" step="0.01" min="0" name="positionPct"
+                   value="${sum.positionSource === 'computed' ? '' : (state.positionPctByYear?.[sum.year] ?? '')}"
+                   ${sum.positionSource === 'computed' ? 'disabled' : ''}
+                   placeholder="${sum.positionSource === 'computed' ? S.positionComputedHint : '100'}" />
+          </label>
           <button type="submit" class="btn-primary" style="padding:0.4rem 1rem;">${S.updateInflation}</button>
         </form>
 
@@ -425,19 +462,23 @@ export function render(container, state) {
                 ${(monthsByYear[sum.year] || []).slice().sort((a,b) => b.id.localeCompare(a.id)).map(m => {
                   // WP13.3: עמודת "שעות נוספות" הוסרה — overtimePay כבר כלול בברוטו (engine.js), כך
                   // שהיא פירטה סכום שנספר ממילא. הוחלפה במענקים ובאחוז משרה לפי בקשת המשתמש.
-                  const pos = m.estimate?.paramsSnapshot?.personal?.positionPercent;
+                  // אחוז המשרה נגזר מרשת הנוכחות (position.js) — לא מהפרמטר הידני שבהגדרות.
+                  const pos = monthPositionOf(m, attParams, asOf);
+                  const eff = pos.toDate ?? pos;
                   return `
                   <tr>
                     <td style="font-weight:600">${m.id}</td>
                     <td>${_monthCell(m.actual?.gross, m.estimate?.gross, S.actualGross)}</td>
                     <td>${_monthCell(m.actual?.net, m.estimate?.net, S.actualNet)}</td>
                     <td>${m.actual?.bonuses ? formatCurrency(m.actual.bonuses) : S.emptyField}</td>
-                    <td>${pos == null ? S.emptyField : `${+pos.toFixed(2)}%`}</td>
+                    <td>${!pos.hasData || eff.positionPct == null ? S.emptyField : `<span title="${S.positionCounted}: ${eff.countedHours} ש׳ ÷ ${S.positionPotential}: ${eff.potentialHours} ש׳${pos.toDate ? ' — ' + S.positionToDate : ''}">${eff.positionPct}%${pos.toDate ? '*' : ''}</span>`}</td>
                   </tr>
                 `;}).join('')}
               </tbody>
             </table>
           </div>
+          ${(monthsByYear[sum.year] || []).some(m => monthPositionOf(m, attParams, asOf).toDate?.positionPct != null)
+            ? `<p class="hint">${S.positionPartialNote}</p>` : ''}
         `}
       </div>
     `;

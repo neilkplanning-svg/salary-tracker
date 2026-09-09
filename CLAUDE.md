@@ -64,6 +64,9 @@ src/
   engine/
     engine.js          # pipeline חישוב טהור
     overtime.js        # תת-מנוע שעות נוספות (משוחזר מהאקסל)
+    attendance-hours.js # קטגוריזציית שעות יומית (categorizeDay)
+    attendance-month.js # השלמת חיסורים חודשית (calcMonthlyShortfall)
+    position.js        # אחוז משרה חודשי/שנתי — נגזר מהנוכחות, לא מוזן
     defaults.js        # פרמטרים לאומיים כברירת מחדל
   model/
     schema.js          # schemaVersion + validate()

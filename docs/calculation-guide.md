@@ -101,6 +101,41 @@
 
 `zeroUtilizationPct` = אחוז שעות האפס שנוצלו לכיסוי, מוצג במסכי נוכחות/משוער כמדד מידע.
 
+### 2.3 אחוז משרה — `calcMonthPosition` / `calcYearPosition`
+
+**קובץ:** `src/engine/position.js`. אחוז המשרה **אינו מוזן** בשום מקום — הוא נגזר מרשת הנוכחות בלבד:
+
+```
+אחוז משרה חודשי = (שעות נוכחות בפועל + שעות היעדרות בתשלום) ÷ (ימי א׳–ה׳ בחודש × fullDayHours)
+אחוז משרה שנתי  = Σ אותן שעות בשנה ÷ Σ אותן שעות אפשריות בשנה
+```
+
+**המונה** ("כמה עבדתי"):
+- **שעות נוכחות** = כניסה→יציאה לכל יום, **כולל** שעות נוספות, שעות אפס, שעות ללא-אישור וההפסקה.
+  זהו אותו סולם שבו מוגדר `fullDayHours` (8:54 — נוכחות ליום מלא, כולל ההפסקה), ולכן יום נוכחות
+  מלא = 100% בדיוק. משום כך המספר גדול ב-~30 דקות ליום מסכום העמודות "רגיל/נוסף/אפס/ללא-אישור"
+  בטבלת הנוכחות — שם ההפסקה כבר מנוכה.
+- **שעות היעדרות בתשלום** = חופשה, מחלה והשתלמות (`day.leave.hours`; יום השתלמות מסומן = יום מלא).
+  יום שנעבד חלקית והושלם בחופשה נספר יחד כיום מלא.
+
+**המכנה** ("כמה התאפשר לעבוד"): מספר ימי **א׳–ה׳** בחודש (שישי ושבת אינם ימי עבודה אפשריים)
+כפול `fullDayHours`. לדוגמה ינואר 2026: 21 ימים × 8:54 = 186.9 שעות.
+
+**נקודות שכדאי להכיר:**
+- **עבודה בשישי נספרת במונה** (היא שעות שעבדתי) אך שישי **אינו** במכנה — ולכן חודש עם שישיות
+  עמוסים יכול לעבור 100%. כך גם חודש עם הרבה שעות נוספות.
+- **היעדרות שנרשמה על שישי/שבת אינה נספרת** — אין ממה להיעדר ביום שאינו יום עבודה.
+- **חודש מתמשך:** מסכי נוכחות/היסטוריה מציגים גם "עד היום" — המכנה נחתך בימי העבודה שכבר חלפו,
+  אחרת האחוז נראה נמוך מלאכותית עד סוף החודש. בחישוב השנתי, החודש הנוכחי נספר לפי "עד היום".
+- **חודש שלא תועד כלל אינו נספר בשנה** — לא במונה ולא במכנה. חודש ריק היה מוריד את האחוז השנתי
+  כאילו לא עבדתי בו, בעוד שהמשמעות היא "לא הוזנה נוכחות".
+- **חגים אינם מוכרים לאפליקציה.** יום חג שלא נרשם כחופשה נספר כיום עבודה אפשרי שלא נעבד בו.
+- **השנתי אינו ממוצע החודשים** — הוא יחס הסכומים, ולכן חודש עם יותר ימי עבודה משפיע יותר.
+- **`settings.personal.positionPercent`** ("אחוז משרה (מקדם legacy)" במסך הגדרות) הוא **דבר אחר**:
+  מקדם במסלול השכר הישן (§3.9) בלבד, ואינו מופיע באף אחד מהמסכים כאחוז משרה.
+- לשנים היסטוריות ללא רשת נוכחות ניתן להזין אחוז משרה שנתי ידנית במסך היסטוריה
+  (`positionPctByYear`); הערך המחושב מהנוכחות תמיד גובר עליו.
+
 ---
 
 ## 3. שכר משוער (estimate) — `src/engine/engine.js` (`calculate`)
@@ -255,9 +290,14 @@ netAfterReductions = net − fromRegular − fromOvertime + quarterlyBonus − b
 
 לכל חודש בשנה: **actual-first** — אם הוזן `month.actual.gross/net`, הוא גובר; אחרת נופלים חזרה ל-`month.estimate.gross/net` השמור (לא לחישוב חי!). מסוכמים: `totalGross`, `totalNet`, `bonusesGross` (מ-`actual.bonuses` + `reductions.quarterlyBonus`), `additionsGross` ("תוספות קבועות" — נגזר **מתוך ה-`estimate.paramsSnapshot` השמור** של כל חודש: כל רכיבי earnings שאינם בקבוצת "שכר בסיס" + `overtimePay` + תוספת רכב מזומן; שוב — לא חישוב מחדש, אלא קריאה מהתמונה הקפואה). ממוצעים חודשיים, יחס נטו/ברוטו, ואחוז שינוי הכנסה/נטו מול השנה הקודמת.
 
+**אחוז משרה שנתי** (`avgPositionPct`) מחושב בנפרד מכל השאר: הוא נגזר ישירות מרשת הנוכחות של חודשי
+השנה (`calcYearPosition`, §2.3) — סכום השעות חלקי סכום השעות האפשריות — ולא מהתמונות השמורות ולא
+כממוצע האחוזים החודשיים. `positionSource` מציין מאין הגיע: `'computed'` (מהנוכחות) או `'manual'`
+(ערך שנתי שהוזן ידנית לשנה ללא נוכחות מתועדת); `undefined` = אין מספיק נתונים, ומוצג `—` ולא "0%".
+
 ### 8.2 שנה ידנית (`source: 'manual'`, ללא חודשים מתועדים)
 
-לשנים שקדמו לשימוש באפליקציה: הזנה חלקית של `totalGross`/`totalNet`/`bonusesGross`/`monthsCount`/`notes` דרך כרטיס "הוסף שנה היסטורית". שדות שלא הוזנו נשארים ריקים (`—`) ולא אפס, כדי להבדיל "לא הוזן" מ"אפס". מסומנת בתג "ידני" (לעומת "נגזר").
+לשנים שקדמו לשימוש באפליקציה: הזנה חלקית של `totalGross`/`totalNet`/`bonusesGross`/`monthsCount`/`notes` דרך כרטיס "הוסף שנה היסטורית" (ואחוז משרה שנתי דרך שדה "אחוז משרה שנתי" שליד האינפלציה). שדות שלא הוזנו נשארים ריקים (`—`) ולא אפס, כדי להבדיל "לא הוזן" מ"אפס". מסומנת בתג "ידני" (לעומת "נגזר").
 
 **כלל מיזוג:** שנה "נגזרת" (עם חודשים ב-`months[]`) **תמיד גוברת** על ערך ידני קיים לאותה שנה — גם אם קיימת רשומה ב-`manualYearSummaries`.
 
@@ -292,6 +332,8 @@ netAfterReductions = net − fromRegular − fromOvertime + quarterlyBonus − b
 | `dollarFund.*` + `personal.dollarFundRules` | קרן דולרית | יתרה/נטו-אחרי-מס נגזרים, עצמאי לגמרי מהמנוע | קרן דולרית בלבד |
 | `month.actual.{gross,net,approvedOT,bonuses}` | בפועל | טבלת השוואה מול snapshot; `bonusesGross` בהיסטוריה | בפועל, היסטוריה |
 | `month.estimate` (תמונה שמורה) | "שמור תמונה" במשוער | קפוא — משמש להשוואה ולהיסטוריה, לא מחושב מחדש | בפועל, היסטוריה |
+| `month.days[].start/end` + `leave` (שוב) | נוכחות | `positionPct` — אחוז משרה חודשי/שנתי (`position.js`, §2.3) | נוכחות, משוער, היסטוריה, ייצוא Excel |
+| `positionPctByYear[year]` | היסטוריה | אחוז משרה שנתי **רק** לשנה ללא נוכחות מתועדת (המחושב גובר) | היסטוריה |
 | `inflationByYear[year]` | היסטוריה | מוצג מול `incomeChangePct` | היסטוריה (גרף אינפלציה) |
 | `manualYearSummaries[year]` | היסטוריה | סיכום שנה ידני (רק לשנים ללא `months`) | היסטוריה |
 
@@ -299,6 +341,6 @@ netAfterReductions = net − fromRegular − fromOvertime + quarterlyBonus − b
 
 ## מקורות
 
-`src/engine/engine.js` · `src/engine/attendance-hours.js` · `src/engine/attendance-month.js` · `src/engine/overtime.js` · `src/engine/defaults.js` · `src/model/schema.js` · `src/model/store.js` · `src/ui/estimate.js` · `src/ui/actual.js` · `src/ui/reductions.js` · `src/ui/aidfund.js` · `src/ui/dollarfund.js` · `src/ui/history.js` · `src/ui/charts.js` · `src/ui/attendance.js` · `src/ui/settings.js` · `src/io/excel-io.js` · `src/io/json-io.js` · `src/storage/persistence.js` · `src/sync/filesync.js`.
+`src/engine/engine.js` · `src/engine/attendance-hours.js` · `src/engine/attendance-month.js` · `src/engine/position.js` · `src/engine/overtime.js` · `src/engine/defaults.js` · `src/model/schema.js` · `src/model/store.js` · `src/ui/estimate.js` · `src/ui/actual.js` · `src/ui/reductions.js` · `src/ui/aidfund.js` · `src/ui/dollarfund.js` · `src/ui/history.js` · `src/ui/charts.js` · `src/ui/attendance.js` · `src/ui/settings.js` · `src/io/excel-io.js` · `src/io/json-io.js` · `src/storage/persistence.js` · `src/sync/filesync.js`.
 
 לפירוט הנוסחאות המקוריות מהאקסל (מקור-אמת היסטורי למנוע) ראו `docs/excel-formulas.md`.
