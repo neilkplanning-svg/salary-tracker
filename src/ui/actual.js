@@ -9,62 +9,30 @@
 
 import { store } from '../model/store.js';
 import { STRINGS, formatCurrency, escapeHtml } from './strings.he.js';
-
-const HEB_MONTHS = [
-  'ינואר','פברואר','מרץ','אפריל','מאי','יוני',
-  'יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר',
-];
-
-/** חודש נצפה כ-UI state — שורד re-renders */
-let _viewMonthId = null;
-
-/** @returns {string} YYYY-MM בזמן ישראל */
-function _todayMonth() {
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric', month: '2-digit', timeZone: 'Asia/Jerusalem',
-  }).format(new Date()).slice(0, 7);
-}
-
-/** @param {string} monthId @param {number} delta @returns {string} YYYY-MM */
-function _shiftMonth(monthId, delta) {
-  const [y, m] = monthId.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+import { getViewMonth, monthNavHTML, bindMonthNav, toast } from './ui-kit.js';
 
 /**
  * @param {HTMLElement} container
  * @param {object} state
  */
 export function render(container, state) {
-  if (!_viewMonthId) _viewMonthId = _todayMonth();
-
-  const monthId = _viewMonthId;
-  const [y, m]  = monthId.split('-').map(Number);
+  const monthId = getViewMonth();
   const stored  = state.months.find(mo => mo.id === monthId) ?? { id: monthId, days: [] };
   const actual  = stored.actual  ?? {};
   const snap    = stored.estimate ?? null;
 
+  // WP14: כשיש כבר השוואה — היא התוכן העיקרי ומוצגת ראשונה; אחרת הטופס קודם
+  const hasCompare = snap && (actual.gross != null || actual.net != null);
   container.innerHTML = `
     <div class="act-screen">
-      ${_navHTML(monthId, y, m)}
-      ${_formHTML(actual)}
-      ${_diffHTML(actual, snap)}
+      ${monthNavHTML(monthId)}
+      ${hasCompare ? _diffHTML(actual, snap) + _formHTML(actual) : _formHTML(actual) + _diffHTML(actual, snap)}
     </div>`;
 
   _bind(container, monthId, actual);
 }
 
 // ─── HTML builders ────────────────────────────────────────────────────────
-
-function _navHTML(monthId, y, m) {
-  return `
-    <div class="card act-nav">
-      <button class="btn-nav" id="act-prev">‹ קודם</button>
-      <h2 class="act-month-title">${HEB_MONTHS[m - 1]} ${y}</h2>
-      <button class="btn-nav" id="act-next">הבא ›</button>
-    </div>`;
-}
 
 /**
  * טופס הזנת נתוני תלוש בפועל
@@ -79,7 +47,7 @@ function _formHTML(a) {
         <div class="act-field">
           <label class="act-lbl" for="act-gross">${STRINGS.actual.gross}</label>
           <div class="act-input-wrap">
-            <input id="act-gross" name="gross" type="number" min="0" step="0.01"
+            <input id="act-gross" name="gross" type="number" inputmode="decimal" min="0" step="0.01"
                    class="act-input" value="${v('gross')}" placeholder="0">
             <span class="act-unit">₪</span>
           </div>
@@ -87,7 +55,7 @@ function _formHTML(a) {
         <div class="act-field">
           <label class="act-lbl" for="act-net">${STRINGS.actual.net}</label>
           <div class="act-input-wrap">
-            <input id="act-net" name="net" type="number" min="0" step="0.01"
+            <input id="act-net" name="net" type="number" inputmode="decimal" min="0" step="0.01"
                    class="act-input" value="${v('net')}" placeholder="0">
             <span class="act-unit">₪</span>
           </div>
@@ -95,7 +63,7 @@ function _formHTML(a) {
         <div class="act-field">
           <label class="act-lbl" for="act-ot">${STRINGS.actual.approvedOT}</label>
           <div class="act-input-wrap">
-            <input id="act-ot" name="approvedOT" type="number" min="0" step="0.5"
+            <input id="act-ot" name="approvedOT" type="number" inputmode="decimal" min="0" step="0.5"
                    class="act-input" value="${v('approvedOT')}" placeholder="0">
             <span class="act-unit">ש׳</span>
           </div>
@@ -103,7 +71,7 @@ function _formHTML(a) {
         <div class="act-field">
           <label class="act-lbl" for="act-bonuses">${STRINGS.actual.bonuses}</label>
           <div class="act-input-wrap">
-            <input id="act-bonuses" name="bonuses" type="number" min="0" step="0.01"
+            <input id="act-bonuses" name="bonuses" type="number" inputmode="decimal" min="0" step="0.01"
                    class="act-input" value="${v('bonuses')}" placeholder="0">
             <span class="act-unit">₪</span>
           </div>
@@ -176,10 +144,10 @@ function _diffHTML(a, snap) {
 
     return `
       <tr class="act-diff-row">
-        <td class="act-diff-lbl">${lbl}</td>
-        <td class="act-diff-val">${estCell}</td>
-        <td class="act-diff-val">${actCell}</td>
-        <td class="act-diff-val ${diffClass}">${diffCell}</td>
+        <td class="act-diff-lbl rt-title">${lbl}</td>
+        <td class="act-diff-val" data-label="משוער">${estCell}</td>
+        <td class="act-diff-val" data-label="בפועל">${actCell}</td>
+        <td class="act-diff-val ${diffClass}" data-label="פער">${diffCell}</td>
       </tr>`;
   }).join('');
 
@@ -190,7 +158,7 @@ function _diffHTML(a, snap) {
   return `
     <div class="card">
       <h3>${STRINGS.actual.diffTitle}</h3>
-      <table class="act-diff-table">
+      <table class="act-diff-table rtable rtable-3">
         <thead>
           <tr class="act-diff-head">
             <th class="act-diff-th"></th>
@@ -208,15 +176,7 @@ function _diffHTML(a, snap) {
 // ─── Event bindings ───────────────────────────────────────────────────────
 
 function _bind(container, monthId, currentActual) {
-  // ניווט חודש
-  container.querySelector('#act-prev').addEventListener('click', () => {
-    _viewMonthId = _shiftMonth(monthId, -1);
-    render(container, store.getState());
-  });
-  container.querySelector('#act-next').addEventListener('click', () => {
-    _viewMonthId = _shiftMonth(monthId, 1);
-    render(container, store.getState());
-  });
+  bindMonthNav(container, () => render(container, store.getState()));
 
   // שמירת טופס
   container.querySelector('#act-form').addEventListener('submit', e => {
@@ -247,13 +207,7 @@ function _bind(container, monthId, currentActual) {
       mo.actual = updated;
     });
 
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.setAttribute('role', 'status');
-    toast.setAttribute('aria-live', 'polite');
-    toast.textContent = 'תלוש בפועל נשמר ✓';
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2500);
+    toast('תלוש בפועל נשמר ✓');
   });
 
   // נקה נתוני תלוש

@@ -38,6 +38,7 @@ const MODULES = [
   'src/model/store.js',
   'src/storage/persistence.js',
   'src/ui/strings.he.js',
+  'src/ui/ui-kit.js',
   'src/ui/charts.js',
   'src/io/json-io.js',
   'src/sync/filesync.js',

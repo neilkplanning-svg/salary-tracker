@@ -20,7 +20,8 @@
  */
 
 import { store } from '../model/store.js';
-import { STRINGS, formatUsd } from './strings.he.js';
+import { STRINGS, formatUsd, escapeHtml } from './strings.he.js';
+import { icon, toast } from './ui-kit.js';
 
 const S = STRINGS.dollarFund;
 
@@ -121,18 +122,18 @@ function _depositsHTML(deposits) {
   const today    = _todayDate();
   const listHTML = deposits.length === 0
     ? `<p class="hint" style="margin:0.35rem 0">${S.depositsEmpty}</p>`
-    : `<div class="aid-tbl-wrap"><table class="aid-table">
+    : `<div class="aid-tbl-wrap"><table class="aid-table rtable">
         <thead><tr>
-          <th>${S.date}</th><th>${S.amountUsd}</th><th>${S.notes}</th><th></th>
+          <th>${S.date}</th><th>${S.amountUsd}</th><th>${S.notes}</th><th><span class="visually-hidden">מחק</span></th>
         </tr></thead>
         <tbody>
           ${deposits.map(d => `
             <tr class="aid-row">
-              <td class="aid-c-date">${_fmtDate(d.date)}</td>
-              <td class="aid-c-amt">${formatUsd(d.amountUsd ?? 0)}</td>
-              <td class="aid-c-notes">${_esc(d.notes ?? '')}</td>
-              <td class="aid-c-del">
-                <button class="aid-del" data-type="deposit" data-id="${d.id}" title="מחק" aria-label="מחק הפקדה">✕</button>
+              <td class="aid-c-date rt-title">${_fmtDate(d.date)}</td>
+              <td class="aid-c-amt" data-label="${S.amountUsd}">${formatUsd(d.amountUsd ?? 0)}</td>
+              <td class="aid-c-notes" data-label="${S.notes}">${escapeHtml(d.notes ?? '') || '—'}</td>
+              <td class="rt-actions">
+                <button type="button" class="icon-btn icon-btn-danger aid-del" data-type="deposit" data-id="${d.id}" title="מחק" aria-label="מחק הפקדה ${_fmtDate(d.date)}">${icon('trash')}</button>
               </td>
             </tr>`).join('')}
         </tbody>
@@ -143,14 +144,14 @@ function _depositsHTML(deposits) {
       <h3>${S.deposits}</h3>
       ${listHTML}
       <details class="aid-add-details">
-        <summary class="aid-add-summary">${S.addDeposit}</summary>
+        <summary class="aid-add-summary">${icon('plus')}${S.addDeposit}</summary>
         <form id="df-dep-form" class="aid-add-form">
           <div class="aid-add-row">
             <label class="aid-add-lbl">${S.date}
               <input id="df-dep-date" type="date" class="aid-input" value="${today}">
             </label>
             <label class="aid-add-lbl">${S.amountUsd}
-              <input id="df-dep-amount" type="number" min="0" step="0.01"
+              <input id="df-dep-amount" type="number" inputmode="decimal" min="0" step="0.01"
                      class="aid-input" placeholder="0">
             </label>
             <label class="aid-add-lbl">${S.notes}
@@ -177,22 +178,22 @@ function _redemptionsHTML(redemptions, rules) {
 
   const listHTML = redemptions.length === 0
     ? `<p class="hint" style="margin:0.35rem 0">${S.redemptionsEmpty}</p>`
-    : `<div class="aid-tbl-wrap"><table class="aid-table">
+    : `<div class="aid-tbl-wrap"><table class="aid-table rtable">
         <thead><tr>
-          <th>${S.date}</th><th>${S.amountUsd}</th><th>${S.type}</th><th>${S.netAfterTax}</th><th>${S.notes}</th><th></th>
+          <th>${S.date}</th><th>${S.amountUsd}</th><th>${S.type}</th><th>${S.netAfterTax}</th><th>${S.notes}</th><th><span class="visually-hidden">מחק</span></th>
         </tr></thead>
         <tbody>
           ${redemptions.map(r => {
             const net = netAfterTaxOf(r);
             return `
             <tr class="aid-row">
-              <td class="aid-c-date">${_fmtDate(r.date)}</td>
-              <td class="aid-c-amt">${formatUsd(r.amountUsd ?? 0)}</td>
-              <td>${typeLabel(r.type)}</td>
-              <td class="aid-c-amt">${net == null ? '—' : formatUsd(net)}</td>
-              <td class="aid-c-notes">${_esc(r.notes ?? '')}</td>
-              <td class="aid-c-del">
-                <button class="aid-del" data-type="redemption" data-id="${r.id}" title="מחק" aria-label="מחק פדיון">✕</button>
+              <td class="aid-c-date rt-title">${_fmtDate(r.date)}${r.notes ? ` · ${escapeHtml(r.notes)}` : ''}</td>
+              <td class="aid-c-amt" data-label="${S.amountUsd}">${formatUsd(r.amountUsd ?? 0)}</td>
+              <td data-label="${S.type}">${typeLabel(r.type)}</td>
+              <td class="aid-c-amt" data-label="${S.netAfterTax}">${net == null ? '—' : formatUsd(net)}</td>
+              <td class="aid-c-notes rt-hide-mobile">${escapeHtml(r.notes ?? '')}</td>
+              <td class="rt-actions">
+                <button type="button" class="icon-btn icon-btn-danger aid-del" data-type="redemption" data-id="${r.id}" title="מחק" aria-label="מחק פדיון ${_fmtDate(r.date)}">${icon('trash')}</button>
               </td>
             </tr>`;
           }).join('')}
@@ -204,14 +205,14 @@ function _redemptionsHTML(redemptions, rules) {
       <h3>${S.redemptions}</h3>
       ${listHTML}
       <details class="aid-add-details">
-        <summary class="aid-add-summary">${S.addRedemption}</summary>
+        <summary class="aid-add-summary">${icon('plus')}${S.addRedemption}</summary>
         <form id="df-red-form" class="aid-add-form">
           <div class="aid-add-row">
             <label class="aid-add-lbl">${S.date}
               <input id="df-red-date" type="date" class="aid-input" value="${today}">
             </label>
             <label class="aid-add-lbl">${S.amountUsd}
-              <input id="df-red-amount" type="number" min="0" step="0.01"
+              <input id="df-red-amount" type="number" inputmode="decimal" min="0" step="0.01"
                      class="aid-input" placeholder="0">
             </label>
             <label class="aid-add-lbl">${S.type}
@@ -288,6 +289,8 @@ function _bind(container, rules) {
       alert('אין יתרה לפדיון.');
       return;
     }
+    // WP14: פעולה גורפת (כל היתרה) — דורשת אישור מפורש, כמו מחיקה
+    if (!confirm(`${S.retirementConfirm} ${formatUsd(balance)}?`)) return;
     const today = _todayDate();
     store.setState(draft => {
       _ensureDollarFund(draft);
@@ -302,19 +305,20 @@ function _bind(container, rules) {
     _toast(`${S.redemptionAdded} ✓`);
   });
 
-  // מחיקת הפקדה או פדיון (event delegation)
-  container.addEventListener('click', e => {
-    const btn = e.target.closest('.aid-del');
-    if (!btn) return;
-    if (!confirm('למחוק?')) return;
-    const { type, id } = btn.dataset;
-    store.setState(draft => {
-      _ensureDollarFund(draft);
-      if (type === 'deposit') {
-        draft.dollarFund.deposits = draft.dollarFund.deposits.filter(d => d.id !== id);
-      } else if (type === 'redemption') {
-        draft.dollarFund.redemptions = draft.dollarFund.redemptions.filter(r => r.id !== id);
-      }
+  // מחיקת הפקדה או פדיון — WP14: מאזין לכל כפתור (delegation על ה-container הקבוע הצטבר
+  // בכל render והציג חלון אישור אחד לכל render קודם)
+  container.querySelectorAll('.aid-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm(STRINGS.ui.confirmDelete)) return;
+      const { type, id } = btn.dataset;
+      store.setState(draft => {
+        _ensureDollarFund(draft);
+        if (type === 'deposit') {
+          draft.dollarFund.deposits = draft.dollarFund.deposits.filter(d => d.id !== id);
+        } else if (type === 'redemption') {
+          draft.dollarFund.redemptions = draft.dollarFund.redemptions.filter(r => r.id !== id);
+        }
+      });
     });
   });
 }
@@ -358,21 +362,4 @@ function _tryAddRedemption(date, amount, type, notes, rules) {
   return true;
 }
 
-/** escaping למניעת HTML injection בטקסט משתמש */
-function _esc(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function _toast(msg) {
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.setAttribute('role', 'status');
-  el.setAttribute('aria-live', 'polite');
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2500);
-}
+const _toast = msg => toast(msg);

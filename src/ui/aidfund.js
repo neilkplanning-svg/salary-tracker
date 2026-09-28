@@ -27,7 +27,8 @@
 
 import { store } from '../model/store.js';
 import { calculate, isActiveInMonth } from '../engine/engine.js';
-import { STRINGS, formatCurrency } from './strings.he.js';
+import { STRINGS, formatCurrency, escapeHtml } from './strings.he.js';
+import { icon, toast } from './ui-kit.js';
 
 /** @returns {string} YYYY-MM בזמן ישראל */
 function _todayMonth() {
@@ -160,18 +161,18 @@ function _depositsHTML(deposits) {
   const today    = _todayDate();
   const listHTML = deposits.length === 0
     ? `<p class="hint" style="margin:0.35rem 0">אין הפקדות רשומות.</p>`
-    : `<div class="aid-tbl-wrap"><table class="aid-table">
+    : `<div class="aid-tbl-wrap"><table class="aid-table rtable">
         <thead><tr>
-          <th>תאריך</th><th>סכום</th><th>הערות</th><th></th>
+          <th>תאריך</th><th>סכום</th><th>הערות</th><th><span class="visually-hidden">מחק</span></th>
         </tr></thead>
         <tbody>
           ${deposits.map(d => `
             <tr class="aid-row">
-              <td class="aid-c-date">${_fmtDate(d.date)}</td>
-              <td class="aid-c-amt">${formatCurrency(d.amount ?? 0)}</td>
-              <td class="aid-c-notes">${_esc(d.notes ?? '')}</td>
-              <td class="aid-c-del">
-                <button class="aid-del" data-type="deposit" data-id="${d.id}" title="מחק" aria-label="מחק הפקדה">✕</button>
+              <td class="aid-c-date rt-title">${_fmtDate(d.date)}</td>
+              <td class="aid-c-amt" data-label="סכום">${formatCurrency(d.amount ?? 0)}</td>
+              <td class="aid-c-notes" data-label="הערות">${escapeHtml(d.notes ?? '') || '—'}</td>
+              <td class="rt-actions">
+                <button type="button" class="icon-btn icon-btn-danger aid-del" data-type="deposit" data-id="${d.id}" title="מחק" aria-label="מחק הפקדה ${_fmtDate(d.date)}">${icon('trash')}</button>
               </td>
             </tr>`).join('')}
         </tbody>
@@ -182,14 +183,14 @@ function _depositsHTML(deposits) {
       <h3>${STRINGS.aidFund.deposits}</h3>
       ${listHTML}
       <details class="aid-add-details">
-        <summary class="aid-add-summary">+ הוסף הפקדה</summary>
+        <summary class="aid-add-summary">${icon('plus')}הוסף הפקדה</summary>
         <form id="aid-dep-form" class="aid-add-form">
           <div class="aid-add-row">
             <label class="aid-add-lbl">תאריך
               <input id="aid-dep-date" type="date" class="aid-input" value="${today}">
             </label>
             <label class="aid-add-lbl">סכום (₪)
-              <input id="aid-dep-amount" type="number" min="0" step="0.01"
+              <input id="aid-dep-amount" type="number" inputmode="decimal" min="0" step="0.01"
                      class="aid-input" placeholder="0">
             </label>
             <label class="aid-add-lbl">הערות
@@ -207,21 +208,21 @@ function _loansHTML(loans) {
   const today    = _todayDate();
   const listHTML = loans.length === 0
     ? `<p class="hint" style="margin:0.35rem 0">אין הלוואות רשומות.</p>`
-    : `<div class="aid-tbl-wrap"><table class="aid-table">
+    : `<div class="aid-tbl-wrap"><table class="aid-table rtable">
         <thead><tr>
-          <th>תאריך</th><th>סכום הלוואה</th><th>החזר/חודש</th><th>${STRINGS.aidFund.loanFrom}</th><th>${STRINGS.aidFund.loanTo}</th><th>הערות</th><th></th>
+          <th>תאריך</th><th>סכום הלוואה</th><th>החזר/חודש</th><th>${STRINGS.aidFund.loanFrom}</th><th>${STRINGS.aidFund.loanTo}</th><th>הערות</th><th><span class="visually-hidden">מחק</span></th>
         </tr></thead>
         <tbody>
           ${loans.map(l => `
             <tr class="aid-row">
-              <td class="aid-c-date">${_fmtDate(l.date)}</td>
-              <td class="aid-c-amt">${formatCurrency(l.amount ?? 0)}</td>
-              <td class="aid-c-amt aid-repayment-cell">${formatCurrency(l.monthlyRepayment ?? 0)}</td>
-              <td>${l.startMonth ?? '—'}</td>
-              <td>${l.endMonth ?? '—'}</td>
-              <td class="aid-c-notes">${_esc(l.notes ?? '')}</td>
-              <td class="aid-c-del">
-                <button class="aid-del" data-type="loan" data-id="${l.id}" title="מחק" aria-label="מחק הלוואה">✕</button>
+              <td class="aid-c-date rt-title">${_fmtDate(l.date)}${l.notes ? ` · ${escapeHtml(l.notes)}` : ''}</td>
+              <td class="aid-c-amt" data-label="סכום הלוואה">${formatCurrency(l.amount ?? 0)}</td>
+              <td class="aid-c-amt aid-repayment-cell" data-label="החזר/חודש">${formatCurrency(l.monthlyRepayment ?? 0)}</td>
+              <td data-label="${STRINGS.aidFund.loanFrom}">${l.startMonth ?? '—'}</td>
+              <td data-label="${STRINGS.aidFund.loanTo}">${l.endMonth ?? '—'}</td>
+              <td class="aid-c-notes rt-hide-mobile">${escapeHtml(l.notes ?? '')}</td>
+              <td class="rt-actions">
+                <button type="button" class="icon-btn icon-btn-danger aid-del" data-type="loan" data-id="${l.id}" title="מחק" aria-label="מחק הלוואה ${_fmtDate(l.date)}">${icon('trash')}</button>
               </td>
             </tr>`).join('')}
         </tbody>
@@ -232,18 +233,18 @@ function _loansHTML(loans) {
       <h3>${STRINGS.aidFund.loans}</h3>
       ${listHTML}
       <details class="aid-add-details">
-        <summary class="aid-add-summary">+ הוסף הלוואה</summary>
+        <summary class="aid-add-summary">${icon('plus')}הוסף הלוואה</summary>
         <form id="aid-loan-form" class="aid-add-form">
           <div class="aid-add-row">
             <label class="aid-add-lbl">תאריך
               <input id="aid-loan-date" type="date" class="aid-input" value="${today}">
             </label>
             <label class="aid-add-lbl">סכום הלוואה (₪)
-              <input id="aid-loan-amount" type="number" min="0" step="0.01"
+              <input id="aid-loan-amount" type="number" inputmode="decimal" min="0" step="0.01"
                      class="aid-input" placeholder="0">
             </label>
             <label class="aid-add-lbl">החזר חודשי (₪)
-              <input id="aid-loan-rep" type="number" min="0" step="0.01"
+              <input id="aid-loan-rep" type="number" inputmode="decimal" min="0" step="0.01"
                      class="aid-input" placeholder="0">
             </label>
             <label class="aid-add-lbl">${STRINGS.aidFund.loanFrom}
@@ -329,6 +330,7 @@ function _bind(container) {
         amount: Math.round(amount * 100) / 100,
         notes,
       });
+      _syncBalance(draft);
     });
     _toast('הפקדה נוספה ✓');
   });
@@ -354,41 +356,27 @@ function _bind(container) {
         startMonth,
         endMonth,
       });
+      _syncBalance(draft);
     });
     _toast('הלוואה נוספה ✓');
   });
 
-  // מחיקת הפקדה או הלוואה (event delegation)
-  container.addEventListener('click', e => {
-    const btn = e.target.closest('.aid-del');
-    if (!btn) return;
-    if (!confirm('למחוק?')) return;
-    const { type, id } = btn.dataset;
-    store.setState(draft => {
-      if (type === 'deposit') {
-        draft.aidFund.deposits = draft.aidFund.deposits.filter(d => d.id !== id);
-      } else if (type === 'loan') {
-        draft.aidFund.loans = draft.aidFund.loans.filter(l => l.id !== id);
-      }
+  // מחיקת הפקדה או הלוואה — WP14: מאזין לכל כפתור. קודם מאזין delegation נוסף ל-container
+  // הקבוע בכל render, ומחיקה הקפיצה חלון אישור אחד לכל render שקדם לה.
+  container.querySelectorAll('.aid-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm(STRINGS.ui.confirmDelete)) return;
+      const { type, id } = btn.dataset;
+      store.setState(draft => {
+        if (type === 'deposit') {
+          draft.aidFund.deposits = draft.aidFund.deposits.filter(d => d.id !== id);
+        } else if (type === 'loan') {
+          draft.aidFund.loans = draft.aidFund.loans.filter(l => l.id !== id);
+        }
+        _syncBalance(draft);
+      });
     });
   });
 }
 
-/** escaping למניעת HTML injection בטקסט משתמש */
-function _esc(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function _toast(msg) {
-  const el = document.createElement('div');
-  el.className = 'toast';
-  el.setAttribute('role', 'status');
-  el.setAttribute('aria-live', 'polite');
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2500);
-}
+const _toast = msg => toast(msg);

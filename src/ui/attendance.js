@@ -1,31 +1,39 @@
 /**
- * attendance.js — מסך נוכחות: שעון כניסה/יציאה + רשת חודשית (WP8.4+)
+ * attendance.js — מסך נוכחות: שעון כניסה/יציאה + רשת חודשית (WP8.4+, WP14.3)
  * Input: state (months[])  Output: DOM מסך נוכחות
- * Deps: store.js, strings.he.js, attendance-hours.js
+ * Deps: store.js, strings.he.js, ui-kit.js, attendance-hours.js, attendance-month.js
  *
  * שינויים WP8.4+:
  *   (1) breakCode קבוע מ-settings.national.attendanceParams.defaultBreakCode (לא בחירה יומית)
  *       ניתן לדרוס ליום ספציפי מה-modal; ברירת מחדל: defaultBreakCode
- *   (2) toggle עשרוני / HH:MM בראש העמוד — משפיע על כל ערכי השעות בטבלה ובסיכום
+ *   (2) toggle עשרוני / HH:MM — משפיע על כל ערכי השעות בטבלה ובסיכום
  *   (3) present=true אוטומטי אם start/end קיים; אין צורך בסימון ידני
  *   (4) פיצול תאריך (dd/MM) + יום בשבוע נפרד (WP8.4)
  *   (5) עמודות מחושבות: רגיל/נוסף/אפס/ללא-אישור מ-categorizeDay
  *   (6) צביעת שורה לחיסור
+ *
+ * WP14.3 (מובייל):
+ *   - כרטיס שעון עם פעולה ראשית אחת לפי מצב (כניסה / יציאה / סיכום) + טיימר חי
+ *   - במסך צר הטבלה (10 עמודות, גלילה אופקית) מוחלפת ברשימת כרטיסי-יום; כל שורה כולה
+ *     היא יעד מגע לעריכה (בדסקטופ גם לחיצה על שורת הטבלה פותחת עריכה)
+ *   - modal העריכה נפתח כגיליון תחתון במובייל; נוסף "נקה יום"
+ *   - אזהרת "יום פתוח" לא כוללת את היום הנוכחי (יום עבודה פתוח היום הוא מצב תקין)
+ *   - החודש הנצפה משותף עם משוער/בפועל/הפחתות (ui-kit.js)
  */
 
 import { store } from '../model/store.js';
 import { STRINGS } from './strings.he.js';
+import { getViewMonth, monthNavHTML, bindMonthNav, todayMonth, shiftMonth, icon, toast, ltr } from './ui-kit.js';
 import { categorizeDay } from '../engine/attendance-hours.js';
 import { calcMonthlyShortfall } from '../engine/attendance-month.js';
 
-/** חודש נצפה + מצב תצוגה — שורדים re-renders (module singletons) */
-let _viewMonthId  = null;
-let _decimalMode  = true;   // true=עשרוני, false=HH:MM
+const A = STRINGS.attendance;
 
-const HEB_MONTHS = [
-  'ינואר','פברואר','מרץ','אפריל','מאי','יוני',
-  'יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר',
-];
+/** מצב תצוגה — שורד re-renders (module singleton) */
+let _decimalMode  = true;   // true=עשרוני, false=HH:MM
+/** טיימר חי של כרטיס השעון (מתעדכן כל 30 שניות כל עוד יום העבודה פתוח) */
+let _tick = null;
+
 const HEB_DAYS_SHORT = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
 
 // ─── Time / format helpers ─────────────────────────────────────────────────
@@ -36,9 +44,6 @@ function _todayDate() {
     year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Jerusalem',
   }).format(new Date());
 }
-
-/** @returns {string} YYYY-MM */
-function _todayMonth() { return _todayDate().slice(0, 7); }
 
 /** @returns {string} HH:mm בזמן ישראל */
 function _nowTime() {
@@ -55,6 +60,11 @@ function _nowTime() {
 function _fmtH(h) {
   if (!h || h <= 0) return '';
   if (_decimalMode) return h.toFixed(2).replace(/\.?0+$/, '');
+  return _hhmm(h);
+}
+
+/** @param {number} h שעות עשרוניות @returns {string} "8:24" */
+function _hhmm(h) {
   const totalMin = Math.round(h * 60);
   const hh = Math.floor(totalMin / 60);
   const mm = (totalMin % 60).toString().padStart(2, '0');
@@ -63,11 +73,8 @@ function _fmtH(h) {
 
 /** פורמט סיכום (תמיד עם יחידה) */
 function _fmtSum(h) {
-  if (_decimalMode) return h.toFixed(1) + ' ש׳';
-  const totalMin = Math.round(h * 60);
-  const hh = Math.floor(totalMin / 60);
-  const mm = (totalMin % 60).toString().padStart(2, '0');
-  return `${hh}:${mm}`;
+  if (_decimalMode) return h.toFixed(1) + ' ' + A.hoursUnit;
+  return _hhmm(h);
 }
 
 /**
@@ -82,16 +89,15 @@ function _hoursFromTimes(s, e) {
   return mins > 0 ? mins / 60 : 0;
 }
 
-/** @param {string} monthId @param {number} delta @returns {string} YYYY-MM */
-function _shiftMonth(monthId, delta) {
-  const [y, m] = monthId.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
 /** @param {string} dateStr YYYY-MM-DD @returns {number} 0–6 (Sun–Sat) */
 function _dow(dateStr) {
   return new Date(dateStr + 'T12:00:00Z').getDay();
+}
+
+/** @param {string} dateStr YYYY-MM-DD @returns {string} "28/9" */
+function _dm(dateStr) {
+  const [, mo, dd] = dateStr.split('-');
+  return `${parseInt(dd)}/${parseInt(mo)}`;
 }
 
 // ─── Day helpers ──────────────────────────────────────────────────────────
@@ -156,15 +162,54 @@ function _saveDay(monthId, dayData) {
   });
 }
 
+/**
+ * מידע תצוגה משותף לשורת טבלה ולכרטיס-יום: שעות מחושבות, מחלקות, תג סטטוס.
+ * @param {object} day יום מועשר (_enrichDay)
+ * @param {string} todayStr
+ */
+function _dayView(day, todayStr) {
+  const dow    = _dow(day.date);
+  const isShab = dow === 6;
+  const isFri  = dow === 5;
+
+  const hasComputed = day.presenceInQuota != null;
+  const reg   = hasComputed ? (day.regularPaid    ?? 0) : (day.regularHours  ?? 0);
+  const ot    = day.overtimeHours  ?? 0;
+  const zero  = day.zeroHours      ?? 0;
+  const unap  = day.unapprovedHours ?? 0;
+
+  const isOpen = !!(day.present && day.start && !day.end);
+  const isShortfall = hasComputed && !day.isFullDay && !isShab && !day.leave && !day.training
+                      && (day.presenceInQuota ?? 0) > 0;
+
+  const leaveType = day.leave?.type ?? (day.training ? 'training' : null);
+  // WP8.9: יום עם שעות עבודה בפועל שהושלם בחופשה/מחלה = יום נוכחות רגיל, לא יום היעדרות
+  const workedWithCompletion = day.start != null && leaveType != null && leaveType !== 'training';
+  let badge = '';
+  if (isShab)                       badge = '<span class="bdg bdg-shab">שבת</span>';
+  else if (isOpen)                  badge = '<span class="bdg bdg-open">פתוח</span>';
+  else if (workedWithCompletion)    badge = `<span class="bdg bdg-pres" title="הושלם ליום מלא (${day.leave?.hours ?? 0} ש׳ ${leaveType === 'sick' ? 'מחלה' : 'חופשה'})">נוכח+${leaveType === 'sick' ? 'מחלה' : 'חופשה'}</span>`;
+  else if (leaveType === 'vacation') badge = '<span class="bdg bdg-vac">חופשה</span>';
+  else if (leaveType === 'sick')     badge = '<span class="bdg bdg-sick">מחלה</span>';
+  else if (leaveType === 'training') badge = '<span class="bdg bdg-train">השתלמות</span>';
+  else if (day.present)              badge = '<span class="bdg bdg-pres">נוכח</span>';
+
+  const shortfallIcon = isShortfall ? ' <span class="att-shortfall-icon" title="חיסור — לא יום מלא">⚠</span>' : '';
+  // breakCode בפועל (ייחודי ליום אם הוגדר, אחרת ברירת מחדל)
+  const bcOverride = (day.breakCode != null) ? ' <span class="att-bc-override" title="קוד הפסקה ייחודי ליום">📌</span>' : '';
+
+  return { dow, isShab, isFri, isOpen, isShortfall, reg, ot, zero, unap, leaveType,
+           isToday: day.date === todayStr, isFuture: day.date > todayStr,
+           badge, marks: shortfallIcon + bcOverride };
+}
+
 // ─── Main render ──────────────────────────────────────────────────────────
 
 /** @param {HTMLElement} container @param {object} state */
 export function render(container, state) {
-  if (!_viewMonthId) _viewMonthId = _todayMonth();
-
-  const monthId   = _viewMonthId;
+  const monthId   = getViewMonth();
   const todayStr  = _todayDate();
-  const isCurrent = monthId === _todayMonth();
+  const isCurrent = monthId === todayMonth();
   const stored    = state.months.find(m => m.id === monthId)?.days ?? [];
   const allDays   = _buildDays(monthId, stored);
   const attParams = state.settings?.national?.attendanceParams ?? null;
@@ -173,7 +218,8 @@ export function render(container, state) {
   const enriched  = allDays.map(d => _enrichDay(d, attParams));
 
   const todayDay  = isCurrent ? enriched.find(d => d.date === todayStr) : null;
-  const openDays  = allDays.filter(d => d.present && d.start && !d.end);
+  // יום פתוח *היום* הוא מצב עבודה רגיל — מזהירים רק על ימים קודמים שלא נסגרו
+  const openDays  = allDays.filter(d => d.present && d.start && !d.end && d.date !== todayStr);
 
   // סיכומים מחושבים
   const sumReg   = enriched.reduce((s, d) => s + (d.regularPaid   ?? d.regularHours  ?? 0), 0);
@@ -196,26 +242,28 @@ export function render(container, state) {
 
   container.innerHTML = `
     <div class="att-screen">
-      ${_navHTML(monthId)}
-      <div class="att-toolbar card">
-        <span class="att-toolbar-info">הפסקה ברירת מחדל: <strong>${defBCLabel}</strong></span>
-        <div class="att-toolbar-right">
-          <button class="btn-sec att-toggle-fmt" id="btn-toggle-fmt"
+      ${monthNavHTML(monthId)}
+      ${isCurrent ? _clockHTML(todayDay, todayStr) : ''}
+      ${openDays.length ? _warnHTML(openDays) : ''}
+      ${_summaryHTML(sumReg, sumOT, sumZero, sumUnap, sumLeave, shortfall)}
+      <section class="card att-days" aria-labelledby="att-days-title">
+        <div class="att-days-head">
+          <h3 id="att-days-title">${A.monthDays}</h3>
+          <span class="att-days-info">${A.defaultBreak}: <strong>${defBCLabel}</strong></span>
+          <button type="button" class="btn-sec att-toggle-fmt" id="btn-toggle-fmt"
                   title="החלף בין תצוגה עשרונית ו-HH:MM">
-            ${_decimalMode ? '⏱ HH:MM' : '# עשרוני'}
+            ${_decimalMode ? A.showHhmm : A.showDecimal}
           </button>
         </div>
-      </div>
-      ${isCurrent ? _clockHTML(todayDay) : ''}
-      ${openDays.length ? _warnHTML(openDays) : ''}
-      ${_tableHTML(enriched, todayStr)}
-      ${_summaryHTML(sumReg, sumOT, sumZero, sumUnap, sumLeave)}
-      ${_shortfallIndicatorHTML(shortfall)}
+        ${_tableHTML(enriched, todayStr)}
+        ${_listHTML(enriched, todayStr)}
+      </section>
       ${_leaveUtilHTML(state, monthId)}
     </div>
     ${_modalHTML(attParams)}`;
 
-  _bind(container, monthId, allDays, enriched, todayStr, isCurrent, attParams);
+  _bind(container, monthId, allDays, todayStr, isCurrent, attParams);
+  _startTick(container, todayDay);
 }
 
 // ─── HTML builders ────────────────────────────────────────────────────────
@@ -227,101 +275,78 @@ function _bwLabel(bw) {
     const mm = Math.round((h % 1) * 60).toString().padStart(2, '0');
     return `${hh}:${mm}`;
   };
-  return `${f(bw[0])}–${f(bw[1])}`;
+  return ltr(`${f(bw[0])}–${f(bw[1])}`);
 }
 
-function _navHTML(monthId) {
-  const [y, m] = monthId.split('-').map(Number);
-  return `
-    <div class="card att-nav">
-      <button class="btn-nav" id="att-prev">‹ קודם</button>
-      <h2 class="att-month-title">${HEB_MONTHS[m - 1]} ${y}</h2>
-      <button class="btn-nav" id="att-next">הבא ›</button>
-    </div>`;
-}
-
-function _clockHTML(day) {
+/**
+ * כרטיס שעון — פעולה ראשית אחת לפי מצב היום:
+ * idle → "כניסה" · working → טיימר חי + "יציאה" · done → סיכום + "עריכת היום".
+ */
+function _clockHTML(day, todayStr) {
   const started = day?.start;
   const ended   = day?.end;
-  let status;
+  const dayLbl  = `${A.today} · יום ${HEB_DAYS_SHORT[_dow(todayStr)]} ${_dm(todayStr)}`;
+
   if (!started) {
-    status = 'לא נרשמה כניסה היום';
-  } else if (!ended) {
-    const elapsed = _hoursFromTimes(started, _nowTime());
-    status = `כניסה: <strong>${started}</strong> | <span class="att-open-tag">יציאה: פתוח ⚠</span> | ${elapsed.toFixed(1)} ש׳ בינתיים`;
-  } else {
-    const total = _hoursFromTimes(started, ended);
-    status = `כניסה: <strong>${started}</strong> | יציאה: <strong>${ended}</strong> | סה"כ: <strong>${total.toFixed(2)} ש׳</strong>`;
+    return `
+      <div class="card att-clock att-clock-idle">
+        <div class="att-clock-info">
+          <span class="att-clock-day">${dayLbl}</span>
+          <strong class="att-clock-status">${A.notClockedIn}</strong>
+        </div>
+        <button class="btn-primary btn-lg att-clock-main" id="btn-clock-in">${icon('play')}${A.clockIn}</button>
+      </div>`;
   }
+  if (!ended) {
+    const elapsed = _hoursFromTimes(started, _nowTime());
+    return `
+      <div class="card att-clock att-clock-working">
+        <div class="att-clock-info">
+          <span class="att-clock-day">${dayLbl} · <span class="att-live-dot" aria-hidden="true"></span>${A.working}</span>
+          <strong class="att-clock-big" id="att-elapsed" aria-live="off">${_hhmm(elapsed)}</strong>
+          <span class="att-clock-sub">${A.since} ${started}</span>
+        </div>
+        <button class="btn-accent btn-lg att-clock-main" id="btn-clock-out">${icon('stop')}${A.clockOut}</button>
+      </div>`;
+  }
+  const total = _hoursFromTimes(started, ended);
   return `
-    <div class="card att-clock">
-      <p class="att-clock-status">${status}</p>
-      <div class="att-clock-btns">
-        <button class="btn-primary att-btn-lg" id="btn-clock-in" ${started ? 'disabled' : ''}>⏱ ${STRINGS.attendance.clockIn}</button>
-        <button class="btn-sec att-btn-lg"     id="btn-clock-out" ${!started || ended ? 'disabled' : ''}>⏹ ${STRINGS.attendance.clockOut}</button>
+    <div class="card att-clock att-clock-done">
+      <div class="att-clock-info">
+        <span class="att-clock-day">${dayLbl} · ${A.dayDone}</span>
+        <strong class="att-clock-big">${_hhmm(total)}</strong>
+        <span class="att-clock-sub">${ltr(`${started} – ${ended}`)}</span>
       </div>
+      <button class="btn-sec att-clock-edit" id="btn-edit-today" data-date="${todayStr}">${icon('pencil')}${A.editToday}</button>
     </div>`;
 }
 
 function _warnHTML(openDays) {
-  const list = openDays.map(d => {
-    const [, mo, dd] = d.date.split('-');
-    return `${parseInt(dd)}/${parseInt(mo)} (כניסה ${d.start})`;
-  }).join(', ');
-  return `<div class="att-warn">⚠ ${STRINGS.attendance.openDayWarning}: ${list}</div>`;
+  const list = openDays.map(d => `${_dm(d.date)} (כניסה ${d.start})`).join(', ');
+  return `<div class="att-warn" role="alert">${icon('alert')}<span>${A.openDayWarning}: ${list}</span></div>`;
 }
 
-/** בנה שורת טבלה */
+/** בנה שורת טבלה (דסקטופ/טאבלט) */
 function _tableRow(day, todayStr) {
-  const dow    = _dow(day.date);
-  const isShab = dow === 6;
-  const isFri  = dow === 5;
-  const [, mo, dd] = day.date.split('-');
-
-  const hasComputed = day.presenceInQuota != null;
-  const reg   = hasComputed ? (day.regularPaid    ?? 0) : (day.regularHours  ?? 0);
-  const ot    = day.overtimeHours  ?? 0;
-  const zero  = day.zeroHours      ?? 0;
-  const unap  = day.unapprovedHours ?? 0;
-
-  const isShortfall = hasComputed && !day.isFullDay && !isShab && !day.leave && !day.training
-                      && (day.presenceInQuota ?? 0) > 0;
-
+  const v = _dayView(day, todayStr);
   let cls = 'att-row';
-  if (isShab)      cls += ' att-shab';
-  if (isFri)       cls += ' att-fri';
-  if (day.date === todayStr) cls += ' att-today';
-  if (day.present && day.start && !day.end) cls += ' att-open-row';
-  if (isShortfall) cls += ' att-shortfall-row';
-
-  const leaveType = day.leave?.type ?? (day.training ? 'training' : null);
-  // WP8.9: יום עם שעות עבודה בפועל שהושלם בחופשה/מחלה = יום נוכחות רגיל, לא יום היעדרות
-  const workedWithCompletion = day.start != null && leaveType != null && leaveType !== 'training';
-  let badge = '';
-  if (isShab)                       badge = '<span class="bdg bdg-shab">שבת</span>';
-  else if (day.present && day.start && !day.end) badge = '<span class="bdg bdg-open">פתוח</span>';
-  else if (workedWithCompletion)     badge = `<span class="bdg bdg-pres" title="הושלם ליום מלא (${day.leave?.hours ?? 0} ש׳ ${leaveType === 'sick' ? 'מחלה' : 'חופשה'})">נוכח</span>`;
-  else if (leaveType === 'vacation') badge = '<span class="bdg bdg-vac">חופשה</span>';
-  else if (leaveType === 'sick')     badge = '<span class="bdg bdg-sick">מחלה</span>';
-  else if (leaveType === 'training') badge = '<span class="bdg bdg-train">השתלמות</span>';
-  else if (day.present)              badge = '<span class="bdg bdg-pres">נוכח</span>';
-
-  const shortfallIcon = isShortfall ? ' <span class="att-shortfall-icon" title="חיסור — לא יום מלא">⚠</span>' : '';
-
-  // breakCode בפועל (ייחודי ליום אם הוגדר, אחרת ברירת מחדל מוצגת בטולבר)
-  const bcOverride = (day.breakCode != null) ? ' <span class="att-bc-override" title="קוד הפסקה ייחודי ליום">📌</span>' : '';
+  if (v.isShab)      cls += ' att-shab';
+  if (v.isFri)       cls += ' att-fri';
+  if (v.isToday)     cls += ' att-today';
+  if (v.isOpen)      cls += ' att-open-row';
+  if (v.isShortfall) cls += ' att-shortfall-row';
 
   return `<tr class="${cls}" data-date="${day.date}">
-    <td class="att-c-date">${parseInt(dd)}/${parseInt(mo)}</td>
-    <td class="att-c-dow">${HEB_DAYS_SHORT[dow]}</td>
+    <td class="att-c-date">${_dm(day.date)}</td>
+    <td class="att-c-dow">${HEB_DAYS_SHORT[v.dow]}</td>
     <td class="att-c-time">${day.start ?? ''}</td>
     <td class="att-c-time">${day.end   ?? ''}</td>
-    <td class="att-c-hrs">${_fmtH(reg)}</td>
-    <td class="att-c-hrs att-c-ot">${_fmtH(ot)}</td>
-    <td class="att-c-hrs att-c-zero">${_fmtH(zero)}</td>
-    <td class="att-c-hrs att-c-unappr">${_fmtH(unap)}</td>
-    <td class="att-c-stat">${badge}${shortfallIcon}${bcOverride}</td>
-    <td class="att-c-act"><button class="btn-edit-row" data-date="${day.date}" title="${STRINGS.attendance.editManually}" aria-label="${STRINGS.attendance.editManually}">✎</button></td>
+    <td class="att-c-hrs">${_fmtH(v.reg)}</td>
+    <td class="att-c-hrs att-c-ot">${_fmtH(v.ot)}</td>
+    <td class="att-c-hrs att-c-zero">${_fmtH(v.zero)}</td>
+    <td class="att-c-hrs att-c-unappr">${_fmtH(v.unap)}</td>
+    <td class="att-c-stat">${v.badge}${v.marks}</td>
+    <td class="att-c-act"><button class="icon-btn btn-edit-row" data-date="${day.date}" title="${A.editManually}" aria-label="${A.editManually} ${_dm(day.date)}">${icon('pencil')}</button></td>
   </tr>`;
 }
 
@@ -335,40 +360,90 @@ function _tableHTML(enriched, todayStr) {
           <th class="att-c-dow" title="יום בשבוע">יום</th>
           <th>כניסה</th>
           <th>יציאה</th>
-          <th title="${STRINGS.attendance.regularHours}">רגיל</th>
-          <th title="${STRINGS.attendance.overtimeHours}">נוסף</th>
-          <th title="${STRINGS.attendance.zeroHours}">אפס</th>
+          <th title="${A.regularHours}">${A.regularShort}</th>
+          <th title="${A.overtimeHours}">${A.overtimeShort}</th>
+          <th title="${A.zeroHours}">${A.zeroShort}</th>
           <th title="שעות ללא אישור (לפני 06:30 / אחרי 17:00)">ללא-אישור</th>
           <th>סטטוס</th>
-          <th></th>
+          <th><span class="visually-hidden">${A.editManually}</span></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
 }
 
-function _summaryHTML(reg, ot, zero, unap, leaveDays) {
-  const items = [
-    [STRINGS.attendance.regularHours,  _fmtSum(reg)],
-    [STRINGS.attendance.overtimeHours, _fmtSum(ot)],
-    [STRINGS.attendance.zeroHours,     _fmtSum(zero)],
-    ['ללא אישור',                      _fmtSum(unap)],
-    [STRINGS.attendance.leaveAbsent,   leaveDays + ' ימים'],
-  ];
-  return `<div class="card att-sum">${
-    items.map(([lbl, val]) =>
-      `<div class="att-sum-item"><span class="att-sum-lbl">${lbl}</span><strong>${val}</strong></div>`
-    ).join('')
-  }</div>`;
+/**
+ * רשימת כרטיסי-יום למסך צר (WP14.3) — אותו מידע כמו הטבלה, בלי גלילה אופקית.
+ * כל כרטיס הוא כפתור אחד (יעד מגע מלא) שפותח את עריכת היום.
+ */
+function _listHTML(enriched, todayStr) {
+  const items = enriched.map(day => {
+    const v = _dayView(day, todayStr);
+    const hasTimes = day.start != null;
+    const isEmpty = !hasTimes && !v.leaveType;
+    let cls = 'att-item';
+    if (v.isShab || v.isFri) cls += ' att-item-weekend';
+    if (v.isToday)     cls += ' att-item-today';
+    if (v.isOpen)      cls += ' att-item-open';
+    if (v.isShortfall) cls += ' att-item-short';
+    if (isEmpty)       cls += ' att-item-empty';
+
+    let main;
+    if (hasTimes) main = `<span class="att-item-times">${day.start} – ${day.end ?? '…'}</span>`;
+    else if (v.isShab || v.isFri || v.isFuture) main = '';
+    else if (isEmpty) main = `<span class="att-item-none">${A.notReported}</span>`;
+    else main = '';
+
+    const chips = [
+      v.ot   > 0 ? `<span class="chip chip-ot">${A.overtimeShort} ${_fmtH(v.ot)}</span>` : '',
+      v.zero > 0 ? `<span class="chip">${A.zeroShort} ${_fmtH(v.zero)}</span>` : '',
+      v.unap > 0 ? `<span class="chip chip-unap">${A.unapprovedShort} ${_fmtH(v.unap)}</span>` : '',
+    ].join('');
+    // ברשימה הצרה "נוכח" הוא מצב ברירת המחדל של יום עם שעות — התג רק מוסיף רעש; מוצגים
+    // רק מצבים חריגים (פתוח / חופשה / מחלה / השתלמות / נוכח+השלמה)
+    const plainPresent = v.badge.includes('bdg-pres') && !v.leaveType;
+    const statusBadge = ((v.isShab && isEmpty) || plainPresent) ? '' : v.badge;
+
+    return `<li class="${cls}">
+      <button type="button" class="att-item-btn" data-date="${day.date}" aria-label="${A.editDay} ${_dm(day.date)}">
+        <span class="att-item-date"><strong>${parseInt(day.date.slice(8))}</strong><small>${HEB_DAYS_SHORT[v.dow]}</small></span>
+        <span class="att-item-main">
+          ${main}
+          <span class="att-item-tags">${statusBadge}${chips}${v.marks}</span>
+        </span>
+        <span class="att-item-hrs">${v.reg > 0 ? `${_fmtH(v.reg)}<small>${A.hoursUnit}</small>` : ''}</span>
+      </button>
+    </li>`;
+  }).join('');
+  return `<ul class="att-list" aria-labelledby="att-days-title">${items}</ul>`;
 }
 
 /**
- * מחוון חיסור חודשי מול מאגר שעות אפס (WP10.3).
+ * סיכום חודשי כרשת מדדים + מחוון חיסור מול מאגר שעות אפס (WP10.3).
  * ירוק: אין חיסור, או שכוסה כולו משעות אפס בלבד.
  * כתום: נדרשו ש"נ/ללא-אישור להשלמה (מעבר לאפס), אך אין ירידת שכר.
  * אדום: יש ירידת שכר (salaryCutHours > 0).
- * מוצג רק כשיש נתוני נוכחות מחושבים (shortfall != null).
+ * המחוון מוצג רק כשיש נתוני נוכחות מחושבים (shortfall != null).
  */
+function _summaryHTML(reg, ot, zero, unap, leaveDays, shortfall) {
+  const tiles = [
+    [A.regularHours,  _fmtSum(reg)],
+    [A.overtimeHours, _fmtSum(ot)],
+    [A.zeroHours,     _fmtSum(zero)],
+    [A.unapprovedShort, _fmtSum(unap)],
+    [A.leaveAbsent,   leaveDays + ' ימים'],
+  ];
+  return `<div class="card att-summary">
+    <h3 class="visually-hidden">${A.monthTotal}</h3>
+    <div class="stat-grid att-stat-grid">${
+      tiles.map(([lbl, val]) =>
+        `<div class="stat-tile"><span class="stat-tile-lbl">${lbl}</span><strong class="stat-tile-val">${val}</strong></div>`
+      ).join('')
+    }</div>
+    ${_shortfallIndicatorHTML(shortfall)}
+  </div>`;
+}
+
 function _shortfallIndicatorHTML(shortfall) {
   if (!shortfall) return '';
   const { totalShortfall, totalZero, coveredFromOT, coveredFromUnapproved,
@@ -377,36 +452,27 @@ function _shortfallIndicatorHTML(shortfall) {
   let statusCls, statusLbl;
   if (salaryCutHours > 0) {
     statusCls = 'att-shortfall-red';
-    statusLbl = STRINGS.attendance.shortfallCut;
+    statusLbl = A.shortfallCut;
   } else if ((coveredFromOT + coveredFromUnapproved) > 0) {
     statusCls = 'att-shortfall-orange';
-    statusLbl = STRINGS.attendance.shortfallCovered;
+    statusLbl = A.shortfallCovered;
   } else {
     statusCls = 'att-shortfall-green';
-    statusLbl = STRINGS.attendance.shortfallOk;
+    statusLbl = A.shortfallOk;
   }
 
-  return `<div class="card att-sum att-shortfall-ind ${statusCls}">
-    <div class="att-sum-item">
-      <span class="att-sum-lbl">${STRINGS.attendance.monthlyShortfall}</span>
-      <strong>${_fmtSum(totalShortfall)}</strong>
-    </div>
-    <div class="att-sum-item">
-      <span class="att-sum-lbl">${STRINGS.attendance.vsZeroPool}</span>
-      <strong>${_fmtSum(totalZero)}</strong>
-    </div>
-    <div class="att-sum-item">
-      <span class="att-sum-lbl">${STRINGS.attendance.zeroUtilPct}</span>
-      <strong>${zeroUtilizationPct.toFixed(1)}%</strong>
-    </div>
-    <div class="att-sum-item">
-      <span class="att-sum-lbl att-shortfall-status">${statusLbl}</span>
-    </div>
+  return `<div class="att-shortfall-ind ${statusCls}">
+    <span class="att-shortfall-status">${statusLbl}</span>
+    <span class="att-shortfall-facts">
+      <span>${A.monthlyShortfall}: <strong>${_fmtSum(totalShortfall)}</strong></span>
+      <span>${A.vsZeroPool}: <strong>${_fmtSum(totalZero)}</strong></span>
+      <span>${A.zeroUtilPct}: <strong>${zeroUtilizationPct.toFixed(1)}%</strong></span>
+    </span>
   </div>`;
 }
 
 /**
- * Modal עריכת יום (WP8.4+):
+ * Modal עריכת יום (WP8.4+) — במובייל מוצג כגיליון תחתון (WP14.3):
  * - start / end
  * - breakCode ייחודי ליום (אופציונלי — null = השתמש בברירת מחדל)
  * - leave (חופשה/מחלה/השתלמות)
@@ -424,49 +490,59 @@ function _modalHTML(attParams) {
   ].join('');
 
   return `
-    <dialog class="att-modal" id="att-modal" dir="rtl">
-      <h3 id="att-modal-title">עריכת יום</h3>
-
-      <div class="att-modal-times">
-        <label>כניסה<input type="time" id="att-m-start"></label>
-        <label>יציאה<input type="time" id="att-m-end"></label>
-        <p id="att-m-total" class="att-m-total"></p>
-      </div>
-
-      <div class="att-modal-break">
-        <label>הפסקה ליום זה (דרוס ברירת מחדל)
-          <select id="att-m-break">${breakOptions}</select>
-        </label>
-      </div>
-
-      <div id="att-m-computed-preview" class="att-computed-preview" style="display:none">
-        <p class="att-computed-title">שעות מחושבות:</p>
-        <div class="att-computed-grid" id="att-m-computed-grid"></div>
-      </div>
-
-      <div class="att-modal-leave">
-        <p class="att-leave-sect-lbl">${STRINGS.attendance.leaveType}:</p>
-        <div class="att-leave-type-group">
-          <button type="button" class="btn-leave-opt" data-type="">${STRINGS.attendance.leaveNone}</button>
-          <button type="button" class="btn-leave-opt" data-type="vacation">${STRINGS.attendance.leaveVacation}</button>
-          <button type="button" class="btn-leave-opt" data-type="sick">${STRINGS.attendance.leaveSick}</button>
-          <button type="button" class="btn-leave-opt" data-type="training">${STRINGS.attendance.leaveTraining}</button>
+    <dialog class="att-modal" id="att-modal" dir="rtl" aria-labelledby="att-modal-title">
+      <div class="att-modal-form">
+        <div class="att-modal-head">
+          <h3 id="att-modal-title">${A.editDay}</h3>
+          <button type="button" class="icon-btn" id="att-m-close" aria-label="${STRINGS.general.close}">${icon('x')}</button>
         </div>
-        <div class="att-leave-hrs-row" id="att-leave-hrs-row" style="display:none">
-          <label>${STRINGS.attendance.leaveHours} <input type="number" id="att-m-leave-hrs" min="0" max="24" step="0.5"></label>
-          <button type="button" class="btn-sec" id="att-m-complete-day">${STRINGS.attendance.leaveCompleteFull}</button>
-        </div>
-      </div>
 
-      <div class="att-modal-acts">
-        <button class="btn-primary" id="att-m-save">${STRINGS.settings.save}</button>
-        <button class="btn-sec"     id="att-m-cancel">${STRINGS.settings.cancel}</button>
+        <div class="att-modal-body">
+          <div class="att-modal-times">
+            <label>כניסה<input type="time" id="att-m-start"></label>
+            <label>יציאה<input type="time" id="att-m-end"></label>
+            <p id="att-m-total" class="att-m-total"></p>
+          </div>
+
+          <div class="att-modal-break">
+            <label>הפסקה ליום זה (דרוס ברירת מחדל)
+              <select id="att-m-break">${breakOptions}</select>
+            </label>
+          </div>
+
+          <div id="att-m-computed-preview" class="att-computed-preview" style="display:none">
+            <p class="att-computed-title">שעות מחושבות:</p>
+            <div class="att-computed-grid" id="att-m-computed-grid"></div>
+          </div>
+
+          <div class="att-modal-leave">
+            <p class="att-leave-sect-lbl" id="att-leave-lbl">${A.leaveType}:</p>
+            <div class="att-leave-type-group" role="group" aria-labelledby="att-leave-lbl">
+              <button type="button" class="btn-leave-opt" data-type="">${A.leaveNone}</button>
+              <button type="button" class="btn-leave-opt" data-type="vacation">${A.leaveVacation}</button>
+              <button type="button" class="btn-leave-opt" data-type="sick">${A.leaveSick}</button>
+              <button type="button" class="btn-leave-opt" data-type="training">${A.leaveTraining}</button>
+            </div>
+            <div class="att-leave-hrs-row" id="att-leave-hrs-row" style="display:none">
+              <label>${A.leaveHours} <input type="number" inputmode="decimal" id="att-m-leave-hrs" min="0" max="24" step="0.5"></label>
+              <button type="button" class="btn-sec" id="att-m-complete-day">${A.leaveCompleteFull}</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="att-modal-acts">
+          <button type="button" class="btn-danger-text" id="att-m-clear">${icon('trash')}${A.clearDay}</button>
+          <span class="att-modal-acts-main">
+            <button type="button" class="btn-sec"     id="att-m-cancel">${STRINGS.settings.cancel}</button>
+            <button type="button" class="btn-primary" id="att-m-save">${STRINGS.settings.save}</button>
+          </span>
+        </div>
       </div>
     </dialog>`;
 }
 
 function _leaveUtilHTML(state, monthId) {
-  const mIds = [monthId, _shiftMonth(monthId, -1), _shiftMonth(monthId, -2), _shiftMonth(monthId, -3)];
+  const mIds = [monthId, shiftMonth(monthId, -1), shiftMonth(monthId, -2), shiftMonth(monthId, -3)];
   let vacH = 0, sickH = 0, trainDays = 0;
   for (const mId of mIds) {
     for (const d of state.months.find(m => m.id === mId)?.days ?? []) {
@@ -478,30 +554,41 @@ function _leaveUtilHTML(state, monthId) {
     }
   }
   const items = [
-    [STRINGS.attendance.leaveVacation, vacH.toFixed(1)  + ' ש׳'],
-    [STRINGS.attendance.leaveSick,     sickH.toFixed(1) + ' ש׳'],
-    [STRINGS.attendance.leaveTraining, trainDays + ' ימים'],
+    [A.leaveVacation, vacH.toFixed(1)  + ' ' + A.hoursUnit],
+    [A.leaveSick,     sickH.toFixed(1) + ' ' + A.hoursUnit],
+    [A.leaveTraining, trainDays + ' ימים'],
   ];
-  return `<div class="card att-sum">
-    <div class="att-leave-util-title">${STRINGS.attendance.leaveUtilTitle}</div>
-    ${items.map(([lbl, val]) =>
-      `<div class="att-sum-item"><span class="att-sum-lbl">${lbl}</span><strong>${val}</strong></div>`
-    ).join('')}
+  return `<div class="card">
+    <h3 class="att-leave-util-title">${A.leaveUtilTitle}</h3>
+    <div class="stat-grid att-stat-grid-3">
+      ${items.map(([lbl, val]) =>
+        `<div class="stat-tile"><span class="stat-tile-lbl">${lbl}</span><strong class="stat-tile-val">${val}</strong></div>`
+      ).join('')}
+    </div>
   </div>`;
+}
+
+// ─── Live timer ────────────────────────────────────────────────────────────
+
+/**
+ * מעדכן את הטיימר של יום עבודה פתוח. מנקה את עצמו כשהמסך הוחלף (האלמנט כבר לא ב-DOM).
+ * @param {HTMLElement} container @param {object|null} todayDay
+ */
+function _startTick(container, todayDay) {
+  clearInterval(_tick);
+  _tick = null;
+  if (!todayDay?.start || todayDay.end) return;
+  _tick = setInterval(() => {
+    const el = container.querySelector('#att-elapsed');
+    if (!el || !el.isConnected) { clearInterval(_tick); _tick = null; return; }
+    el.textContent = _hhmm(_hoursFromTimes(todayDay.start, _nowTime()));
+  }, 30000);
 }
 
 // ─── Event bindings ───────────────────────────────────────────────────────
 
-function _bind(container, monthId, allDays, enriched, todayStr, isCurrent, attParams) {
-  // ניווט חודש
-  container.querySelector('#att-prev').addEventListener('click', () => {
-    _viewMonthId = _shiftMonth(monthId, -1);
-    render(container, store.getState());
-  });
-  container.querySelector('#att-next').addEventListener('click', () => {
-    _viewMonthId = _shiftMonth(monthId, 1);
-    render(container, store.getState());
-  });
+function _bind(container, monthId, allDays, todayStr, isCurrent, attParams) {
+  bindMonthNav(container, () => render(container, store.getState()));
 
   // (2) toggle עשרוני/HH:MM
   container.querySelector('#btn-toggle-fmt')?.addEventListener('click', () => {
@@ -512,23 +599,37 @@ function _bind(container, monthId, allDays, enriched, todayStr, isCurrent, attPa
   if (isCurrent) {
     container.querySelector('#btn-clock-in')?.addEventListener('click', () => {
       const existing = allDays.find(d => d.date === todayStr) ?? _emptyDay(todayStr);
+      const now = _nowTime();
       // present=true אוטומטי ב-_saveDay
-      _saveDay(monthId, { ...existing, start: _nowTime() });
+      _saveDay(monthId, { ...existing, start: now });
+      toast(`${A.clockInDone} ${now} ✓`);
     });
 
     container.querySelector('#btn-clock-out')?.addEventListener('click', () => {
       const existing = allDays.find(d => d.date === todayStr);
       if (!existing) return;
-      _saveDay(monthId, { ...existing, end: _nowTime() });
+      const now = _nowTime();
+      _saveDay(monthId, { ...existing, end: now });
+      toast(`${A.clockOutDone} ${now} ✓`);
     });
   }
 
-  // כפתורי עריכה
-  container.querySelector('.att-tbl tbody')?.addEventListener('click', e => {
-    const btn = e.target.closest('.btn-edit-row');
-    if (!btn) return;
-    const day = allDays.find(d => d.date === btn.dataset.date) ?? _emptyDay(btn.dataset.date);
+  const openFor = date => {
+    const day = allDays.find(d => d.date === date) ?? _emptyDay(date);
     _openModal(container, monthId, day, attParams);
+  };
+
+  container.querySelector('#btn-edit-today')?.addEventListener('click', e => openFor(e.currentTarget.dataset.date));
+
+  // טבלה (דסקטופ): כפתור העריכה או לחיצה בכל מקום בשורה
+  container.querySelector('.att-tbl tbody')?.addEventListener('click', e => {
+    const row = e.target.closest('tr[data-date]');
+    if (row) openFor(row.dataset.date);
+  });
+  // רשימה (מובייל): כל כרטיס-יום הוא כפתור
+  container.querySelector('.att-list')?.addEventListener('click', e => {
+    const btn = e.target.closest('.att-item-btn');
+    if (btn) openFor(btn.dataset.date);
   });
 }
 
@@ -537,9 +638,9 @@ function _openModal(container, monthId, day, attParams) {
   const modal = container.querySelector('#att-modal');
   if (!modal) return;
 
-  const [, mo, dd] = day.date.split('-');
+  const dow = _dow(day.date);
   modal.querySelector('#att-modal-title').textContent =
-    `עריכת יום ${parseInt(dd)}/${parseInt(mo)}`;
+    `${A.editDay} ${_dm(day.date)} · יום ${HEB_DAYS_SHORT[dow]}`;
 
   const startEl     = modal.querySelector('#att-m-start');
   const endEl       = modal.querySelector('#att-m-end');
@@ -567,7 +668,11 @@ function _openModal(container, monthId, day, attParams) {
   leaveHrsEl.value = day.leave?.hours ?? '';
 
   const _syncLeaveUI = () => {
-    leaveBtns.forEach(b => b.classList.toggle('active', b.dataset.type === _leaveType));
+    leaveBtns.forEach(b => {
+      const on = b.dataset.type === _leaveType;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
     leaveHrsRow.style.display = (_leaveType && _leaveType !== 'training') ? '' : 'none';
   };
   _syncLeaveUI();
@@ -594,7 +699,7 @@ function _openModal(container, monthId, day, attParams) {
       else previewBC = parseInt(breakEl.value, 10);
 
       const cat = categorizeDay(
-        { start: startEl.value, end: endEl.value, breakCode: previewBC, dow: _dow(day.date) },
+        { start: startEl.value, end: endEl.value, breakCode: previewBC, dow },
         attParams,
       );
       const fmt = v => v > 0 ? v.toFixed(2) : '0';
@@ -615,6 +720,10 @@ function _openModal(container, monthId, day, attParams) {
   endEl.oninput    = updatePreview;
   breakEl.onchange = updatePreview;
   updatePreview();
+
+  // "נקה יום" רלוונטי רק כשיש מה לנקות
+  const hasData = day.start != null || day.end != null || day.leave != null || day.training;
+  modal.querySelector('#att-m-clear').hidden = !hasData;
 
   modal.showModal();
 
@@ -644,7 +753,18 @@ function _openModal(container, monthId, day, attParams) {
     };
     modal.close();
     _saveDay(monthId, updated);
+    toast(A.savedDay);
   };
 
-  modal.querySelector('#att-m-cancel').onclick = () => modal.close();
+  modal.querySelector('#att-m-clear').onclick = () => {
+    if (!confirm(A.clearDayConfirm)) return;
+    modal.close();
+    _saveDay(monthId, { ..._emptyDay(day.date) });
+  };
+
+  const close = () => modal.close();
+  modal.querySelector('#att-m-cancel').onclick = close;
+  modal.querySelector('#att-m-close').onclick = close;
+  // לחיצה על הרקע (מחוץ לתוכן) סוגרת — ה-dialog עצמו הוא היעד רק כשהלחיצה מחוץ לטופס
+  modal.onclick = e => { if (e.target === modal) close(); };
 }

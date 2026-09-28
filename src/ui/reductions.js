@@ -13,38 +13,17 @@
 
 import { store } from '../model/store.js';
 import { calculate, isActiveInMonth } from '../engine/engine.js';
-import { STRINGS, formatCurrency } from './strings.he.js';
+import { STRINGS, formatCurrency, escapeHtml } from './strings.he.js';
+import { getViewMonth, monthNavHTML, bindMonthNav, icon, toast } from './ui-kit.js';
 
-const HEB_MONTHS = [
-  'ינואר','פברואר','מרץ','אפריל','מאי','יוני',
-  'יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר',
-];
-
-let _viewMonthId = null;
-
-/** @returns {string} YYYY-MM בזמן ישראל */
-function _todayMonth() {
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric', month: '2-digit', timeZone: 'Asia/Jerusalem',
-  }).format(new Date()).slice(0, 7);
-}
-
-/** @param {string} monthId @param {number} delta @returns {string} YYYY-MM */
-function _shiftMonth(monthId, delta) {
-  const [y, m] = monthId.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+const S_RED = STRINGS.reductions;
 
 /**
  * @param {HTMLElement} container
  * @param {object} state — מצב האפליקציה הנוכחי
  */
 export function render(container, state) {
-  if (!_viewMonthId) _viewMonthId = _todayMonth();
-
-  const monthId = _viewMonthId;
-  const [y, m]  = monthId.split('-').map(Number);
+  const monthId = getViewMonth();
   const stored  = state.months.find(mo => mo.id === monthId) ?? { id: monthId, days: [] };
 
   // חישוב חי כולל קרן עזרה וניכויים קבועים — להצגת ההשפעה על netAfterReductions
@@ -70,24 +49,15 @@ export function render(container, state) {
 
   container.innerHTML = `
     <div class="red-screen">
-      ${_navHTML(monthId, y, m)}
+      ${monthNavHTML(monthId)}
       ${_impactHTML(result, aidFundRepayment, activeCustomDeductions)}
       ${_customDeductionsHTML(state.customDeductions ?? [])}
     </div>`;
 
-  _bind(container, monthId);
+  _bind(container);
 }
 
 // ─── HTML builders ────────────────────────────────────────────────────────
-
-function _navHTML(monthId, y, m) {
-  return `
-    <div class="card red-nav">
-      <button class="btn-nav" id="red-prev">‹ קודם</button>
-      <h2 class="red-month-title">${HEB_MONTHS[m - 1]} ${y}</h2>
-      <button class="btn-nav" id="red-next">הבא ›</button>
-    </div>`;
-}
 
 /**
  * כרטיס השפעה: נטו לפני ואחרי ניכויים (קרן עזרה + ניכויים קבועים)
@@ -167,19 +137,19 @@ function _customDeductionsHTML(customDeductions) {
   const S = STRINGS.reductions;
   const listHTML = customDeductions.length === 0
     ? `<p class="hint" style="margin:0.35rem 0">${S.customEmpty}</p>`
-    : `<div class="aid-tbl-wrap"><table class="aid-table">
+    : `<div class="aid-tbl-wrap"><table class="aid-table rtable">
         <thead><tr>
-          <th>${S.customLabel}</th><th>${S.customAmount}</th><th>${S.customFrom}</th><th>${S.customTo}</th><th></th>
+          <th>${S.customLabel}</th><th>${S.customAmount}</th><th>${S.customFrom}</th><th>${S.customTo}</th><th><span class="visually-hidden">${S.customRemove}</span></th>
         </tr></thead>
         <tbody>
           ${customDeductions.map(cd => `
             <tr class="aid-row">
-              <td>${_esc(cd.label ?? '')}</td>
-              <td class="aid-c-amt">${formatCurrency(cd.amount ?? 0)}</td>
-              <td>${cd.startMonth ?? '—'}</td>
-              <td>${cd.endMonth ?? '—'}</td>
-              <td class="aid-c-del">
-                <button class="cd-del" data-id="${cd.id}" title="${S.customRemove}" aria-label="${S.customRemove}">✕</button>
+              <td class="rt-title">${escapeHtml(cd.label ?? '')}</td>
+              <td class="aid-c-amt" data-label="${S.customAmount}">${formatCurrency(cd.amount ?? 0)}</td>
+              <td data-label="${S.customFrom}">${cd.startMonth ?? '—'}</td>
+              <td data-label="${S.customTo}">${cd.endMonth ?? '—'}</td>
+              <td class="rt-actions">
+                <button type="button" class="icon-btn icon-btn-danger cd-del" data-id="${cd.id}" title="${S.customRemove}" aria-label="${S.customRemove}: ${escapeHtml(cd.label ?? '')}">${icon('trash')}</button>
               </td>
             </tr>`).join('')}
         </tbody>
@@ -191,14 +161,14 @@ function _customDeductionsHTML(customDeductions) {
       <p class="hint">${S.customHint}</p>
       ${listHTML}
       <details class="aid-add-details">
-        <summary class="aid-add-summary">+ ${S.customAdd}</summary>
+        <summary class="aid-add-summary">${icon('plus')}${S.customAdd}</summary>
         <form id="cd-add-form" class="aid-add-form">
           <div class="aid-add-row">
             <label class="aid-add-lbl">${S.customLabel}
               <input id="cd-label" type="text" class="aid-input" placeholder="${S.customLabelPlaceholder}">
             </label>
             <label class="aid-add-lbl">${S.customAmount}
-              <input id="cd-amount" type="number" min="0" step="0.01" class="aid-input" placeholder="0">
+              <input id="cd-amount" type="number" inputmode="decimal" min="0" step="0.01" class="aid-input" placeholder="0">
             </label>
             <label class="aid-add-lbl">${S.customFrom}
               <input id="cd-start" type="month" class="aid-input">
@@ -214,27 +184,10 @@ function _customDeductionsHTML(customDeductions) {
     </div>`;
 }
 
-/** escaping למניעת HTML injection בטקסט משתמש */
-function _esc(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
 // ─── Event bindings ───────────────────────────────────────────────────────
 
-function _bind(container, monthId) {
-  // ניווט חודש
-  container.querySelector('#red-prev').addEventListener('click', () => {
-    _viewMonthId = _shiftMonth(monthId, -1);
-    render(container, store.getState());
-  });
-  container.querySelector('#red-next').addEventListener('click', () => {
-    _viewMonthId = _shiftMonth(monthId, 1);
-    render(container, store.getState());
-  });
+function _bind(container) {
+  bindMonthNav(container, () => render(container, store.getState()));
 
   // WP12.5: טופס ההפחתות הזמניות הוסר — נותרו ניווט חודש + ניכויים קבועים בלבד.
 
@@ -257,16 +210,18 @@ function _bind(container, monthId) {
         endMonth:   end,
       });
     });
+    toast(`${S_RED.customAdd} ✓`);
   });
 
-  // מחיקת ניכוי קבוע
-  container.addEventListener('click', e => {
-    const btn = e.target.closest('.cd-del');
-    if (!btn) return;
-    if (!confirm('למחוק ניכוי קבוע זה?')) return;
-    const { id } = btn.dataset;
-    store.setState(draft => {
-      draft.customDeductions = (draft.customDeductions ?? []).filter(cd => cd.id !== id);
+  // מחיקת ניכוי קבוע — WP14: מאזין לכל כפתור (ולא על ה-container הקבוע, שם מאזין חדש
+  // נוסף בכל render והמחיקה הציגה חלון אישור אחד לכל render קודם)
+  container.querySelectorAll('.cd-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!confirm('למחוק ניכוי קבוע זה?')) return;
+      const { id } = btn.dataset;
+      store.setState(draft => {
+        draft.customDeductions = (draft.customDeductions ?? []).filter(cd => cd.id !== id);
+      });
     });
   });
 }

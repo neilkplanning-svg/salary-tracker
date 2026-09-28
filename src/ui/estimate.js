@@ -13,38 +13,14 @@ import { calculate, isActiveInMonth } from '../engine/engine.js';
 import { STRINGS, formatCurrency } from './strings.he.js';
 import { categorizeDay } from '../engine/attendance-hours.js';
 import { EARNING_COMPONENTS } from '../engine/defaults.js';
-
-const HEB_MONTHS = [
-  'ינואר','פברואר','מרץ','אפריל','מאי','יוני',
-  'יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר',
-];
-
-/** חודש נצפה כ-UI state — שורד re-renders (module singleton) */
-let _viewMonthId = null;
-
-/** @returns {string} YYYY-MM בזמן ישראל */
-function _todayMonth() {
-  return new Intl.DateTimeFormat('en-CA', {
-    year: 'numeric', month: '2-digit', timeZone: 'Asia/Jerusalem',
-  }).format(new Date()).slice(0, 7);
-}
-
-/** @param {string} monthId @param {number} delta @returns {string} YYYY-MM */
-function _shiftMonth(monthId, delta) {
-  const [y, m] = monthId.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
+import { getViewMonth, monthNavHTML, bindMonthNav, monthLabel, icon, toast } from './ui-kit.js';
 
 /**
  * @param {HTMLElement} container
  * @param {object} state — מצב האפליקציה הנוכחי
  */
 export function render(container, state) {
-  if (!_viewMonthId) _viewMonthId = _todayMonth();
-
-  const monthId = _viewMonthId;
-  const [y, m]  = monthId.split('-').map(Number);
+  const monthId = getViewMonth();
   const stored  = state.months.find(mo => mo.id === monthId) ?? { id: monthId, days: [] };
   const days    = stored.days ?? [];
   const attParams = state.settings?.national?.attendanceParams ?? null;
@@ -103,7 +79,8 @@ export function render(container, state) {
 
   container.innerHTML = `
     <div class="est-screen">
-      ${_navHTML(monthId, y, m)}
+      ${monthNavHTML(monthId)}
+      ${_heroHTML(result, snapshot, stale, monthId)}
       ${_hoursHTML(sumReg, sumOT, sumZero, sumUnap, cap, attParams != null)}
       ${_shortfallHTML(result)}
       ${_breakdownHTML(result, state.settings.personal, aidFundRepayment, customDeductionsList.filter(cd => isActiveInMonth(cd, monthId)))}
@@ -153,12 +130,35 @@ function _shortfallHTML(r) {
     </div>` : ''}`;
 }
 
-function _navHTML(monthId, y, m) {
+/**
+ * כרטיס "גיבור" (WP14.4) — הנטו המשוער כמספר הראשון שרואים במסך, עם ברוטו ונטו לאחר
+ * הפחתות כמשניים, ומצב התמונה השמורה + פעולת שמירה (קודם כל אלה היו מתחת לקפל במובייל).
+ */
+function _heroHTML(r, snapshot, stale, monthId) {
+  const E = STRINGS.estimate;
+  const hasReductions = Math.abs(r.netAfterReductions - r.net) > 0.01;
+  let chip;
+  if (!snapshot) {
+    chip = `<span class="hero-chip">${E.noSnapshot}</span>`;
+  } else if (stale) {
+    chip = `<span class="hero-chip hero-chip-warn">${icon('alert')}${E.snapshotStale}</span>`;
+  } else {
+    const d = new Intl.DateTimeFormat('he-IL', { day: 'numeric', month: 'numeric' }).format(new Date(snapshot.computedAt));
+    chip = `<span class="hero-chip">${icon('check')}${E.snapshotSavedOn} ${d}</span>`;
+  }
+  const saveLbl = !snapshot ? E.saveSnapshot : (stale ? E.updateSnapshot : '');
   return `
-    <div class="card est-nav">
-      <button class="btn-nav" id="est-prev">‹ קודם</button>
-      <h2 class="est-month-title">${HEB_MONTHS[m - 1]} ${y}</h2>
-      <button class="btn-nav" id="est-next">הבא ›</button>
+    <div class="card hero-card">
+      <span class="hero-label">${E.title} · ${monthLabel(monthId)}</span>
+      <strong class="hero-value">${formatCurrency(r.net)}</strong>
+      <div class="hero-meta">
+        <span>${E.gross} <strong>${formatCurrency(r.gross)}</strong></span>
+        ${hasReductions ? `<span>${E.netAfterRed} <strong>${formatCurrency(r.netAfterReductions)}</strong></span>` : ''}
+      </div>
+      <div class="hero-foot">
+        ${chip}
+        ${saveLbl ? `<button type="button" class="btn-accent js-save-snap">${saveLbl}</button>` : ''}
+      </div>
     </div>`;
 }
 
@@ -190,7 +190,7 @@ function _hoursHTML(sumReg, sumOT, sumZero, sumUnap, cap, hasComputed) {
         <div class="est-h-row est-cap-row">
           <label class="est-h-lbl" for="est-ot-cap">מכסת ש"נ מאושרת</label>
           <span class="est-cap-wrap">
-            <input id="est-ot-cap" type="number" min="0" step="0.5"
+            <input id="est-ot-cap" type="number" inputmode="decimal" min="0" step="0.5"
                    class="est-cap-input"
                    value="${cap != null ? cap : ''}"
                    placeholder="ריק = כולן">
@@ -371,7 +371,7 @@ function _snapshotHTML(snapshot, stale) {
       <div class="card est-snap-card">
         <p class="hint">אין תמונה שמורה לחודש זה.</p>
         <p class="hint">${STRINGS.estimate.snapshotHint}</p>
-        <button class="btn-primary" id="btn-save-snap">${STRINGS.estimate.saveSnapshot}</button>
+        <button class="btn-primary js-save-snap">${STRINGS.estimate.saveSnapshot}</button>
       </div>`;
   }
   const savedAt = new Intl.DateTimeFormat('he-IL', {
@@ -386,8 +386,8 @@ function _snapshotHTML(snapshot, stale) {
       </div>
       ${stale ? `<p class="est-stale-warn">⚠ הנתונים השתנו מאז השמירה — החישוב הנוכחי שונה מהתמונה.</p>` : ''}
       <p class="hint">${STRINGS.estimate.snapshotHint}</p>
-      <button class="btn-${stale ? 'primary' : 'sec'}" id="btn-save-snap">
-        ${stale ? 'עדכן תמונה' : STRINGS.estimate.saveSnapshot}
+      <button class="btn-${stale ? 'primary' : 'sec'} js-save-snap">
+        ${stale ? STRINGS.estimate.updateSnapshot : STRINGS.estimate.saveSnapshot}
       </button>
     </div>`;
 }
@@ -395,15 +395,7 @@ function _snapshotHTML(snapshot, stale) {
 // ─── Event bindings ───────────────────────────────────────────────────────
 
 function _bind(container, monthId, liveResult) {
-  // ניווט חודש
-  container.querySelector('#est-prev').addEventListener('click', () => {
-    _viewMonthId = _shiftMonth(monthId, -1);
-    render(container, store.getState());
-  });
-  container.querySelector('#est-next').addEventListener('click', () => {
-    _viewMonthId = _shiftMonth(monthId, 1);
-    render(container, store.getState());
-  });
+  bindMonthNav(container, () => render(container, store.getState()));
 
   // שינוי מכסת ש"נ — שמירה ל-store (pub/sub → re-render אוטומטי)
   container.querySelector('#est-ot-cap')?.addEventListener('change', e => {
@@ -421,7 +413,7 @@ function _bind(container, monthId, liveResult) {
   });
 
   // שמירת snapshot (כלל #6: paramsSnapshot + computedAt מוטמעים כבר ב-liveResult מהמנוע)
-  container.querySelector('#btn-save-snap')?.addEventListener('click', () => {
+  const saveSnapshot = () => {
     store.setState(draft => {
       let mo = draft.months.find(m => m.id === monthId);
       if (!mo) {
@@ -431,12 +423,7 @@ function _bind(container, monthId, liveResult) {
       }
       mo.estimate = { ...liveResult };
     });
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.setAttribute('role', 'status');
-    toast.setAttribute('aria-live', 'polite');
-    toast.textContent = 'תמונה נשמרה — תשמש להשוואה מול התלוש ולהיסטוריה ✓';
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2500);
-  });
+    toast('תמונה נשמרה — תשמש להשוואה מול התלוש ולהיסטוריה ✓');
+  };
+  container.querySelectorAll('.js-save-snap').forEach(b => b.addEventListener('click', saveSnapshot));
 }

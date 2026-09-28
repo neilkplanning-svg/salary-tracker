@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>מעקב שכר</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <meta name="theme-color" content="#14274E">
@@ -13,34 +13,53 @@
 <body>
   <div id="app">
     <header class="app-header">
-      <h1>מעקב שכר</h1>
+      <h1 class="app-title">מעקב שכר</h1>
       <div class="header-actions">
         <span id="header-sync-status" class="header-sync-status" role="status" aria-live="polite"></span>
-        <button id="header-sync-open" type="button" class="header-sync-btn" aria-label="פתח קובץ OneDrive" title="פתח קובץ OneDrive">
-          <span aria-hidden="true">📂</span><span class="header-sync-label">פתח</span>
+        <button id="header-sync-open" type="button" class="hdr-btn" aria-label="פתח קובץ OneDrive" title="פתח קובץ OneDrive">
+          <span data-icon="folderOpen"></span><span class="hdr-btn-lbl">פתח</span>
         </button>
-        <button id="header-sync-save" type="button" class="header-sync-btn" aria-label="שמור קובץ OneDrive" title="שמור קובץ OneDrive">
-          <span aria-hidden="true">💾</span><span class="header-sync-label">שמור</span>
+        <button id="header-sync-save" type="button" class="hdr-btn" aria-label="שמור קובץ OneDrive" title="שמור קובץ OneDrive">
+          <span data-icon="save"></span><span class="hdr-btn-lbl">שמור</span>
         </button>
-        <button id="theme-toggle" aria-label="החלף ערכת נושא">🌙</button>
+        <button id="theme-toggle" type="button" class="hdr-btn" aria-label="החלף ערכת נושא" title="החלף ערכת נושא"></button>
       </div>
     </header>
-    <nav id="main-nav">
-      <a href="#attendance">נוכחות</a>
-      <a href="#estimate">משוער</a>
-      <a href="#actual">בפועל</a>
-      <a href="#reductions">הפחתות</a>
-      <a href="#aidfund">קרן עזרה</a>
-      <a href="#dollarfund">קרן דולרית</a>
-      <a href="#history">היסטוריה</a>
-      <a href="#settings">הגדרות</a>
+
+    <!-- ניווט עליון — טאבלט/דסקטופ (מוסתר במובייל לטובת #bottom-nav) -->
+    <nav id="main-nav" aria-label="ניווט ראשי">
+      <a href="#attendance" data-screen="attendance"><span data-icon="clock"></span>נוכחות</a>
+      <a href="#estimate" data-screen="estimate"><span data-icon="calculator"></span>משוער</a>
+      <a href="#actual" data-screen="actual"><span data-icon="receipt"></span>בפועל</a>
+      <a href="#reductions" data-screen="reductions"><span data-icon="minusCircle"></span>הפחתות</a>
+      <a href="#aidfund" data-screen="aidfund"><span data-icon="wallet"></span>קרן עזרה</a>
+      <a href="#dollarfund" data-screen="dollarfund"><span data-icon="dollar"></span>קרן דולרית</a>
+      <a href="#history" data-screen="history"><span data-icon="chart"></span>היסטוריה</a>
+      <a href="#settings" data-screen="settings"><span data-icon="sliders"></span>הגדרות</a>
     </nav>
-    <main id="screen-container">
-      <div class="placeholder-notice">
-        <p>האפליקציה בבנייה</p>
-        <p style="font-size:0.85em;opacity:0.7;">WP0.1 — Scaffolding</p>
+
+    <main id="screen-container"></main>
+
+    <!-- WP14.2 — סרגל ניווט תחתון (מובייל בלבד): 4 מסכים יומיומיים + "עוד" -->
+    <nav id="bottom-nav" aria-label="ניווט ראשי">
+      <a href="#attendance" data-screen="attendance"><span data-icon="clock"></span><span class="bn-lbl">נוכחות</span></a>
+      <a href="#estimate" data-screen="estimate"><span data-icon="calculator"></span><span class="bn-lbl">משוער</span></a>
+      <a href="#actual" data-screen="actual"><span data-icon="receipt"></span><span class="bn-lbl">בפועל</span></a>
+      <a href="#history" data-screen="history"><span data-icon="chart"></span><span class="bn-lbl">היסטוריה</span></a>
+      <button type="button" id="bottom-more" aria-haspopup="dialog" aria-controls="more-sheet"><span data-icon="more"></span><span class="bn-lbl">עוד</span></button>
+    </nav>
+
+    <dialog id="more-sheet" class="sheet" aria-labelledby="more-sheet-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <h2 id="more-sheet-title" class="sheet-title">מסכים נוספים</h2>
+      <div class="more-grid">
+        <a href="#reductions" data-screen="reductions"><span data-icon="minusCircle"></span>הפחתות</a>
+        <a href="#aidfund" data-screen="aidfund"><span data-icon="wallet"></span>קרן עזרה</a>
+        <a href="#dollarfund" data-screen="dollarfund"><span data-icon="dollar"></span>קרן דולרית</a>
+        <a href="#settings" data-screen="settings"><span data-icon="sliders"></span>הגדרות</a>
       </div>
-    </main>
+      <button type="button" class="btn-sec sheet-close" data-close-sheet>סגור</button>
+    </dialog>
   </div>
 </body>
 </html>

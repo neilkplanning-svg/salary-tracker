@@ -42,7 +42,10 @@ const GEO_WIDE = {
 };
 const GEO_COMPACT = {
   WIDTH: 380, HEIGHT: 285,          // 4:3
-  PAD_X: 54, PAD_TOP: 42, PAD_BOTTOM: 46,
+  PAD_X: 56, PAD_TOP: 42, PAD_BOTTOM: 46,
+  // WP14: תוויות ציר Y קצרות ("286K" ולא "285.6K ₪") — ב-PAD_X של 56 יחידות התווית
+  // המלאה נחתכה בקצה השמאלי של ה-SVG. יחידת המטבע ברורה מכותרת הגרף.
+  SHORT_AXIS: true,
   FONT_AXIS: 13, FONT_VALUE: 11,
   BAR_MAX: 22, STAGGER_AT: 4,
   // תוויות ערך מעל הפסים מוסתרות במובייל: ברוחב ~275px לאזור הציור, 16 תוויות של
@@ -76,6 +79,14 @@ function formatCompact(val) {
   return formatCurrency(n);
 }
 
+/** תווית ציר קצרה למובייל: "286K" / "23.8K" / "950" — ללא סימן מטבע */
+function formatAxisShort(val) {
+  const n = val || 0;
+  if (Math.abs(n) >= 100000) return Math.round(n / 1000) + 'K';
+  if (Math.abs(n) >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(Math.round(n));
+}
+
 function renderSvg(g, content) {
   return `<svg viewBox="0 0 ${g.WIDTH} ${g.HEIGHT}" width="100%" height="100%" style="font-family:inherit; direction:ltr;">
     ${content}
@@ -92,7 +103,7 @@ function renderAxes(g, xLabels, maxY, minY = 0, isPercent = false) {
   for (let i = 0; i <= ticks; i++) {
     const val = minY + (range * i) / ticks;
     const y = g.HEIGHT - g.PAD_BOTTOM - (chartH * i) / ticks;
-    const label = isPercent ? toPctStr(val) : formatCompact(val);
+    const label = isPercent ? toPctStr(val) : (g.SHORT_AXIS ? formatAxisShort(val) : formatCompact(val));
 
     grid += `
       <line x1="${g.PAD_X}" y1="${y}" x2="${g.WIDTH - g.PAD_X}" y2="${y}" stroke="var(--color-border)" stroke-dasharray="4,4" opacity="0.4" />

@@ -14,12 +14,24 @@
 import { store } from '../model/store.js';
 import { STRINGS, escapeHtml } from './strings.he.js';
 import { applyTheme } from './app.js';
+import { icon, toast, ltr } from './ui-kit.js';
 import { EARNING_COMPONENTS, IMPUTATION_COMPONENTS, gradeLabel } from '../engine/defaults.js';
 import { exportJSON, importJSON } from '../io/json-io.js';
 import { exportExcel, importExcel, downloadTemplate } from '../io/excel-io.js';
 import { openFile as syncOpenFile, saveFile as syncSaveFile, getSyncStatus, initSync, isFSASupported } from '../sync/filesync.js';
 
 const S = STRINGS.settings;
+
+/**
+ * WP14.5 — יש בטופס שינויים שלא נשמרו. כל עוד true, app.js לא מרנדר מחדש את המסך בעקבות
+ * שינוי store חיצוני (למשל מעבר ערכת נושא מהכותרת) — אחרת העריכות היו נמחקות בשקט.
+ */
+let _dirty = false;
+
+/** @returns {boolean} האם app.js רשאי לרנדר את המסך מחדש אחרי שינוי ב-store */
+export function shouldRerender() {
+  return !_dirty;
+}
 
 /** תוויות קבוצות רכיבי שכר */
 const GROUP_LABELS = { base: 'שכר בסיס', add: 'תוספות', special: 'מיוחד' };
@@ -37,6 +49,7 @@ const toPct = v => +(Number(v ?? 0) * 100).toFixed(6);
 export function render(container, state) {
   const { national, personal, theme } = state.settings;
   const car = personal.car ?? { hasCompanyCar: false, allowance: 3879, imputation: 0 };
+  _dirty = false;
 
   container.innerHTML = `
     <form id="settings-form" novalidate>
@@ -49,8 +62,8 @@ export function render(container, state) {
       <div class="card">
         <h3>${S.earningsSection}</h3>
         <p class="hint">${S.earningsNote}</p>
-        <div style="overflow-x:auto">
-          <table class="params-table earnings-table" style="min-width:520px">
+        <div class="tbl-scroll">
+          <table class="params-table earnings-table">
             <thead>
               <tr>
                 <th style="min-width:150px">${S.earningLabel}</th>
@@ -96,7 +109,7 @@ export function render(container, state) {
           ${pct(S.dollarFundTaxRate,    'personal.dollarFundRules.personalTaxRate',    personal.dollarFundRules?.personalTaxRate    ?? 0.47)}
         </div>
         <details style="margin-top:0.8rem">
-          <summary style="cursor:pointer;font-size:0.9em;color:var(--color-muted)">${S.legacySalarySection}</summary>
+          <summary style="cursor:pointer;font-size:0.9em;color:var(--color-text-secondary)">${S.legacySalarySection}</summary>
           <div class="settings-grid" style="margin-top:0.5rem">
             ${num(S.baseConst,        'personal.baseSalary.baseConst',     personal.baseSalary?.baseConst ?? 0)}
             ${num(S.perHourConst,     'personal.baseSalary.perHourConst',  personal.baseSalary?.perHourConst ?? 0)}
@@ -117,12 +130,12 @@ export function render(container, state) {
         <div class="settings-grid" style="margin-top:0.6rem">
           <label class="field" id="car-allowance-field">
             <span>${S.carAllowance}</span>
-            <input type="number" step="any" id="car-allowance" value="${car.allowance ?? 0}" />
+            <input type="number" inputmode="decimal" step="any" id="car-allowance" value="${car.allowance ?? 0}" />
           </label>
           <label class="field" id="car-imputation-field">
             <p class="hint">${S.carImputationPrompt}</p>
             <span>${S.carImputation}</span>
-            <input type="number" step="any" id="car-imputation" value="${car.imputation ?? 0}" />
+            <input type="number" inputmode="decimal" step="any" id="car-imputation" value="${car.imputation ?? 0}" />
           </label>
         </div>
       </div>
@@ -130,17 +143,18 @@ export function render(container, state) {
       <div class="card">
         <h3>${S.imputationsSection}</h3>
         <p class="hint">${S.imputationsNote}</p>
-        <div style="overflow-x:auto">
-          <table class="params-table">
-            <thead><tr><th style="min-width:180px">${S.impLabel}</th><th>${S.impAmount}</th><th>${S.gradeCol}</th></tr></thead>
+        <div class="tbl-scroll">
+          <table class="params-table imputations-table">
+            <thead><tr><th>${S.impLabel}</th><th>${S.impAmount}</th><th>${S.gradeCol}</th></tr></thead>
             <tbody id="imputations-tbody">${imputationsCatalogRows(personal.imputations ?? [])}</tbody>
           </table>
         </div>
-        <button type="button" id="add-custom-imp" class="btn-text" style="margin-top:0.8rem;font-weight:600;color:var(--color-accent);background:none;border:none;cursor:pointer;">${S.addImputation}</button>
+        <button type="button" id="add-custom-imp" class="btn-sec add-row-btn">${S.addImputation}</button>
       </div>
 
-      <div class="card">
-        <h3>${S.national}</h3>
+      <!-- WP14.5: פרמטרים לאומיים (מדרגות מס/ב"ל/בריאות) — כמעט לא נערכים; מקופלים כברירת מחדל -->
+      <details class="card" id="national-section">
+        <summary><h3>${S.national}</h3><span class="hint summary-hint">${S.nationalCollapsedHint}</span></summary>
         <div class="settings-grid">
           ${num(S.creditPointValue,      'national.creditPointValue',       national.creditPointValue)}
           ${num(S.trainingCap,           'national.trainingFundCap',        national.trainingFundCap)}
@@ -169,7 +183,7 @@ export function render(container, state) {
           ${roNum(S.otFactorT1,   national.overtimeRules?.factorTier1)}
           ${roNum(S.otFactorT2,   national.overtimeRules?.factorTier2)}
         </div>
-      </div>
+      </details>
 
       <!-- פרמטרי נוכחות: קוד הפסקה ברירת מחדל -->
       <div class="card">
@@ -187,7 +201,7 @@ export function render(container, state) {
                   return hh+':'+mm;
                 };
                 const sel = national.attendanceParams?.defaultBreakCode === i ? ' selected' : '';
-                return `<option value="${i}"${sel}>${toHhmm(bw[0])}–${toHhmm(bw[1])}</option>`;
+                return `<option value="${i}"${sel}>${ltr(`${toHhmm(bw[0])}–${toHhmm(bw[1])}`)}</option>`;
               }).join('')}
             </select>
           </label>
@@ -213,6 +227,15 @@ export function render(container, state) {
       <div id="settings-errors" class="error-list" role="alert" aria-live="polite"></div>
       <div class="settings-actions">
         <button type="submit" class="btn-accent">${S.save}</button>
+      </div>
+
+      <!-- WP14.5: סרגל שמירה דביק — מופיע עם השינוי הראשון, כדי שלא צריך לגלול לסוף טופס ארוך -->
+      <div class="savebar" id="settings-savebar" hidden>
+        <span class="savebar-msg">${STRINGS.ui.unsaved}</span>
+        <span class="savebar-acts">
+          <button type="button" class="btn-sec" id="settings-discard">${STRINGS.ui.discard}</button>
+          <button type="submit" class="btn-accent">${S.save}</button>
+        </span>
       </div>
     </form>
 
@@ -254,6 +277,20 @@ export function render(container, state) {
 
   const form = container.querySelector('#settings-form');
   form.addEventListener('submit', e => onSave(e, state));
+
+  // מעקב שינויים לא-שמורים → הצגת סרגל השמירה הדביק
+  const savebar = form.querySelector('#settings-savebar');
+  const markDirty = () => {
+    if (_dirty) return;
+    _dirty = true;
+    savebar.hidden = false;
+  };
+  form.addEventListener('input', markDirty);
+  form.addEventListener('change', markDirty);
+  form.querySelector('#settings-discard').addEventListener('click', () => {
+    _dirty = false;
+    render(container, store.getState());
+  });
   container.querySelector('#btn-export-json').addEventListener('click', exportJSON);
   container.querySelector('#btn-import-json').addEventListener('click', importJSON);
   container.querySelector('#btn-export-excel').addEventListener('click', exportExcel);
@@ -267,7 +304,7 @@ export function render(container, state) {
     const st = getSyncStatus();
     if (!isFSASupported()) {
       syncStatusEl.textContent = IO.errorNoFSA;
-      syncStatusEl.style.color = 'var(--color-muted,#888)';
+      syncStatusEl.style.color = 'var(--color-text-secondary)';
     } else if (st.connected) {
       let txt = `${IO.syncConnected}: ${st.fileName}`;
       if (st.lastSaved) {
@@ -279,10 +316,10 @@ export function render(container, state) {
       syncStatusEl.style.color = 'var(--color-accent,#C9A24B)';
     } else if (st.needsPermission && st.fileName) {
       syncStatusEl.textContent = `${st.fileName} — ${IO.syncNeedsPermission}`;
-      syncStatusEl.style.color = 'var(--color-error,#c44)';
+      syncStatusEl.style.color = 'var(--color-danger)';
     } else {
       syncStatusEl.textContent = IO.syncNotConnected;
-      syncStatusEl.style.color = 'var(--color-muted,#888)';
+      syncStatusEl.style.color = 'var(--color-text-secondary)';
     }
   };
   renderSyncStatus();
@@ -318,18 +355,21 @@ export function render(container, state) {
       tr.className = 'custom-imp-row';
       tr.dataset.impId = id;
       tr.innerHTML = `
-        <td><input type="text" class="custom-imp-label" value="" placeholder="${S.impLabelPlaceholder}" style="width:100%" /></td>
-        <td><input type="number" step="any" inputmode="decimal" class="custom-imp-amount" value="0" style="width:120px" /></td>
-        <td>
-          <label style="font-size:0.8rem;white-space:nowrap;margin-left:0.5rem;"><input type="checkbox" class="custom-imp-taxable" checked /> חיוב במס</label>
-          <button type="button" class="remove-imp-btn" title="${S.remove}" aria-label="${S.remove}" style="color:var(--color-danger);background:none;border:none;cursor:pointer;font-size:1.2rem;vertical-align:middle;">×</button>
+        <td class="imp-label-cell"><input type="text" class="custom-imp-label" value="" placeholder="${S.impLabelPlaceholder}" /></td>
+        <td class="imp-amount-cell"><input type="number" step="any" inputmode="decimal" class="custom-imp-amount" value="0" /></td>
+        <td class="imp-extra-cell">
+          <label class="imp-taxable"><input type="checkbox" class="custom-imp-taxable" checked /> חיוב במס</label>
+          <button type="button" class="icon-btn icon-btn-danger remove-imp-btn" title="${S.remove}" aria-label="${S.remove}">${icon('trash')}</button>
         </td>`;
-      tr.querySelector('.remove-imp-btn').addEventListener('click', () => tr.remove());
+      tr.querySelector('.remove-imp-btn').addEventListener('click', () => { tr.remove(); markDirty(); });
       impTbody.appendChild(tr);
+      markDirty();
+      tr.querySelector('.custom-imp-label').focus();
     });
-    
+
     impTbody.querySelectorAll('.remove-imp-btn').forEach(btn => {
-      btn.addEventListener('click', e => e.target.closest('tr').remove());
+      // currentTarget ולא target — הלחיצה עשויה לפגוע ב-SVG שבתוך הכפתור
+      btn.addEventListener('click', e => { e.currentTarget.closest('tr').remove(); markDirty(); });
     });
   }
 }
@@ -339,7 +379,7 @@ function num(label, path, value, step = '1') {
   return `<label class="field">
     <span>${label}</span>
     <input type="number" step="${step}" inputmode="decimal"
-           data-path="${path}" data-type="number" data-label="${label}"
+           data-path="${path}" data-type="number" data-label="${escapeHtml(label)}"
            value="${value ?? 0}" />
   </label>`;
 }
@@ -349,7 +389,7 @@ function numG(label, path, value, grades, step = '1') {
   return `<label class="field">
     <span>${label}</span>
     <input type="number" step="${step}" inputmode="decimal"
-           data-path="${path}" data-type="number" data-label="${label}"
+           data-path="${path}" data-type="number" data-label="${escapeHtml(label)}"
            value="${value ?? 0}" />
     ${gradeBadge(grades)}
   </label>`;
@@ -361,7 +401,7 @@ function pct(label, path, value) {
     <span>${label}</span>
     <span class="pct-wrap">
       <input type="number" step="any" inputmode="decimal"
-             data-path="${path}" data-type="percent" data-label="${label}"
+             data-path="${path}" data-type="percent" data-label="${escapeHtml(label)}"
              value="${toPct(value)}" />
       <span class="pct-sign">%</span>
     </span>
@@ -374,7 +414,7 @@ function pctG(label, path, value, grades) {
     <span>${label}</span>
     <span class="pct-wrap">
       <input type="number" step="any" inputmode="decimal"
-             data-path="${path}" data-type="percent" data-label="${label}"
+             data-path="${path}" data-type="percent" data-label="${escapeHtml(label)}"
              value="${toPct(value)}" />
       <span class="pct-sign">%</span>
     </span>
@@ -400,9 +440,9 @@ function roNum(label, value) {
 function bandsTable(rows, basePath) {
   const body = rows.map((b, i) => `
     <tr>
-      <td><input type="number" step="any" data-path="${basePath}.${i}.min"  data-type="number"  data-label="מינ' שורה ${i + 1}" value="${b.min}" /></td>
-      <td><input type="number" step="any" data-path="${basePath}.${i}.max"  data-type="number"  data-label="מקס' שורה ${i + 1}" value="${b.max}" /></td>
-      <td><input type="number" step="any" data-path="${basePath}.${i}.rate" data-type="percent" data-label="שיעור שורה ${i + 1}" value="${toPct(b.rate)}" /></td>
+      <td><input type="number" inputmode="decimal" step="any" data-path="${basePath}.${i}.min"  data-type="number"  data-label="מינ' שורה ${i + 1}" value="${b.min}" /></td>
+      <td><input type="number" inputmode="decimal" step="any" data-path="${basePath}.${i}.max"  data-type="number"  data-label="מקס' שורה ${i + 1}" value="${b.max}" /></td>
+      <td><input type="number" inputmode="decimal" step="any" data-path="${basePath}.${i}.rate" data-type="percent" data-label="שיעור שורה ${i + 1}" value="${toPct(b.rate)}" /></td>
     </tr>`).join('');
   return `<table class="params-table">
     <thead><tr><th>${S.colMin}</th><th>${S.colMax}</th><th>${S.colRate}</th></tr></thead>
@@ -410,9 +450,13 @@ function bandsTable(rows, basePath) {
   </table>`;
 }
 
-/** סימן flag לקריאה-בלבד (✓/־) */
-function flagCell(on) {
-  return `<td style="text-align:center;color:${on ? 'var(--color-accent,#C9A24B)' : 'var(--color-muted,#888)'}">${on ? '✓' : '־'}</td>`;
+/**
+ * סימן flag לקריאה-בלבד (✓/־). data-label משמש במובייל, שם השורה מוצגת ככרטיס
+ * והדגלים כצ'יפים עם שם הבסיס (כותרות העמודות מוסתרות).
+ */
+function flagCell(on, label) {
+  // escapeHtml: התוויות מכילות גרשיים (ב"ל, קה"ש) שהיו סוגרים את ערך ה-attribute
+  return `<td class="flag-cell ${on ? 'flag-on' : 'flag-off'}" data-label="${escapeHtml(label)}">${on ? '✓' : '־'}</td>`;
 }
 
 /**
@@ -428,24 +472,24 @@ function earningsCatalogRows(earnings) {
   for (const g of GROUP_ORDER) {
     const comps = EARNING_COMPONENTS.filter(c => c.group === g);
     if (!comps.length) continue;
-    html += `<tr class="group-header"><td colspan="7" style="background:var(--color-surface-2,#1f2c4d);font-weight:600;font-size:0.8em">${GROUP_LABELS[g] ?? g}</td></tr>`;
+    html += `<tr class="group-header"><td colspan="7">${GROUP_LABELS[g] ?? g}</td></tr>`;
     html += comps.map(c => {
       const desc = descOf(c.id);
       const labelCell = desc
-        ? `<td><details class="earning-info">
+        ? `<td class="earn-label-cell"><details class="earning-info">
              <summary>${c.label} <span class="info-icon" title="${escapeHtml(desc)}">ⓘ</span></summary>
              <p class="hint">${escapeHtml(desc)}</p>
            </details></td>`
-        : `<td>${c.label}</td>`;
-      return `<tr>
+        : `<td class="earn-label-cell">${c.label}</td>`;
+      return `<tr class="earn-row">
       ${labelCell}
-      <td><input type="number" step="any" inputmode="decimal"
-                 data-earning-id="${c.id}" value="${amountOf(c.id)}" style="width:100px" /></td>
-      ${flagCell(c.inTax)}
-      ${flagCell(c.inNI)}
-      ${flagCell(c.inPension)}
-      ${flagCell(c.inTraining)}
-      <td><span class="grade-badge">${gradeLabel(c.appliesToGrades)}</span></td>
+      <td class="earn-amount-cell"><input type="number" step="any" inputmode="decimal"
+                 data-earning-id="${c.id}" value="${amountOf(c.id)}" aria-label="${c.label} — ${S.earningAmount}" /></td>
+      ${flagCell(c.inTax, S.inTaxShort)}
+      ${flagCell(c.inNI, S.inNIShort)}
+      ${flagCell(c.inPension, S.inPensionShort)}
+      ${flagCell(c.inTraining, S.inTrainingShort)}
+      <td class="earn-grade-cell"><span class="grade-badge">${gradeLabel(c.appliesToGrades)}</span></td>
     </tr>`;
     }).join('');
   }
@@ -461,19 +505,19 @@ function earningsCatalogRows(earnings) {
 function imputationsCatalogRows(imputations) {
   const amountOf = id => imputations.find(i => i.id === id)?.amount ?? 0;
   let html = IMPUTATION_COMPONENTS.map(c => `<tr>
-    <td>${c.label}</td>
-    <td><input type="number" step="any" inputmode="decimal"
-               data-imp-id="${c.id}" value="${amountOf(c.id)}" style="width:120px" /></td>
-    <td><span class="grade-badge">${gradeLabel(c.appliesToGrades)}</span></td>
+    <td class="imp-label-cell">${c.label}</td>
+    <td class="imp-amount-cell"><input type="number" step="any" inputmode="decimal"
+               data-imp-id="${c.id}" value="${amountOf(c.id)}" aria-label="${c.label} — ${S.impAmount}" /></td>
+    <td class="imp-extra-cell"><span class="grade-badge">${gradeLabel(c.appliesToGrades)}</span></td>
   </tr>`).join('');
 
   const customImps = imputations.filter(i => i.id && i.id.startsWith('custom_'));
   html += customImps.map(c => `<tr class="custom-imp-row" data-imp-id="${c.id}">
-    <td><input type="text" class="custom-imp-label" value="${escapeHtml(c.label || '')}" placeholder="${S.impLabelPlaceholder}" style="width:100%" /></td>
-    <td><input type="number" step="any" inputmode="decimal" class="custom-imp-amount" value="${c.amount}" style="width:120px" /></td>
-    <td>
-      <label style="font-size:0.8rem;white-space:nowrap;margin-left:0.5rem;"><input type="checkbox" class="custom-imp-taxable" ${c.taxable ? 'checked' : ''} /> חיוב במס</label>
-      <button type="button" class="remove-imp-btn" title="${S.remove}" aria-label="${S.remove}" style="color:var(--color-danger);background:none;border:none;cursor:pointer;font-size:1.2rem;vertical-align:middle;">×</button>
+    <td class="imp-label-cell"><input type="text" class="custom-imp-label" value="${escapeHtml(c.label || '')}" placeholder="${S.impLabelPlaceholder}" /></td>
+    <td class="imp-amount-cell"><input type="number" step="any" inputmode="decimal" class="custom-imp-amount" value="${c.amount}" /></td>
+    <td class="imp-extra-cell">
+      <label class="imp-taxable"><input type="checkbox" class="custom-imp-taxable" ${c.taxable ? 'checked' : ''} /> חיוב במס</label>
+      <button type="button" class="icon-btn icon-btn-danger remove-imp-btn" title="${S.remove}" aria-label="${S.remove}">${icon('trash')}</button>
     </td>
   </tr>`).join('');
   return html;
@@ -503,6 +547,7 @@ function onSave(e, state) {
   e.preventDefault();
   const form = e.currentTarget;
   const errors = [];
+  let nationalError = false;
 
   const national = structuredClone(state.settings.national);
   const personal = structuredClone(state.settings.personal);
@@ -521,6 +566,7 @@ function onSave(e, state) {
       let v = parseFloat(input.value);
       if (!Number.isFinite(v) || v < 0) {
         errors.push(`${input.dataset.label || path}: ${S.errNonNegative}`);
+        if (root === 'national') nationalError = true;
         return;
       }
       if (t === 'percent') v = v / 100;
@@ -568,12 +614,16 @@ function onSave(e, state) {
   });
   personal.trainingFundDepositAboveCap = form.querySelector('#deposit-above-cap').checked;
 
+  const errorsBeforeBands = errors.length;
   validateBands(national.incomeTaxBrackets,      S.incomeTaxBrackets, errors);
   validateBands(national.nationalInsuranceBands, S.niBands,           errors);
   validateBands(national.healthTaxBands,         S.healthBands,       errors);
+  if (errors.length > errorsBeforeBands) nationalError = true;
 
   const errBox = form.querySelector('#settings-errors');
   if (errors.length) {
+    // WP14.5: הקטע הלאומי מקופל כברירת מחדל — פותחים אותו כדי שהשדה השגוי יהיה גלוי
+    if (nationalError) form.querySelector('#national-section')?.setAttribute('open', '');
     errBox.innerHTML = `<ul>${errors.map(x => `<li>${x}</li>`).join('')}</ul>`;
     errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
@@ -588,22 +638,13 @@ function onSave(e, state) {
     if (fridayCb) national.attendanceParams.fridayAllOvertime = fridayCb.checked;
   }
 
+  // לפני setState: הרינדור-מחדש שה-store מפעיל בודק shouldRerender() — חייב לקבל true
+  _dirty = false;
   store.setState(s => {
     s.settings.national = national;
     s.settings.personal = personal;
     s.settings.theme    = theme;
   });
   applyTheme(theme.mode);
-  showToast(S.savedOk);
-}
-
-/** הודעת אישור צפה — מחוץ ל-container כדי לשרוד re-render */
-function showToast(msg) {
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.setAttribute('role', 'status');
-  t.setAttribute('aria-live', 'polite');
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2200);
+  toast(S.savedOk);
 }

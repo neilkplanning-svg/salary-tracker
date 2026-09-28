@@ -5,7 +5,7 @@
  */
 
 import { store } from '../model/store.js';
-import { STRINGS, formatCurrency } from './strings.he.js';
+import { STRINGS, formatCurrency, escapeHtml } from './strings.he.js';
 import { renderChart } from './charts.js';
 import { EARNING_COMPONENTS } from '../engine/defaults.js';
 // ייבוא דינמי (lazy) — SheetJS נטען רק בלחיצה על "ייצוא ל-Excel", לא בכל render של המסך
@@ -23,7 +23,8 @@ const toPct = v => +(Number(v || 0) * 100).toFixed(2);
  */
 function _monthCell(actualVal, estimateVal, sourceLabel) {
   if (actualVal != null) {
-    return `${formatCurrency(actualVal)} <span class="hint" title="${sourceLabel}">(בפועל)</span>`;
+    // WP14: נקודה קטנה במקום "(בפועל)" — הטקסט גלש לשתי שורות בעמודה צרה במובייל; מקרא מתחת לטבלה
+    return `${formatCurrency(actualVal)}<span class="src-dot" title="${sourceLabel}" aria-label="${sourceLabel}"></span>`;
   }
   return `${formatCurrency(estimateVal || 0)}`;
 }
@@ -43,9 +44,9 @@ function _optPct(v) {
  * @param {string} label @param {string} value @param {boolean} [small] גופן מוקטן לערכים משניים
  */
 function _statBox(label, value, small = true) {
-  return `<div class="stat-box">
-    <div class="stat-label">${label}</div>
-    <div class="stat-value"${small ? ' style="font-size:1.1rem"' : ''}>${value}</div>
+  return `<div class="stat-tile${small ? '' : ' stat-tile-major'}">
+    <span class="stat-tile-lbl">${label}</span>
+    <strong class="stat-tile-val">${value}</strong>
   </div>`;
 }
 
@@ -57,9 +58,9 @@ function _statBox(label, value, small = true) {
 function _changeBox(label, pct) {
   if (pct == null) return _statBox(label, S.emptyField);
   const color = pct >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
-  return `<div class="stat-box">
-    <div class="stat-label">${label}</div>
-    <div class="stat-value" style="font-size:1.1rem; color:${color}">${pct > 0 ? '+' : ''}${toPct(pct)}%</div>
+  return `<div class="stat-tile">
+    <span class="stat-tile-lbl">${label}</span>
+    <strong class="stat-tile-val" style="color:${color}">${pct > 0 ? '+' : ''}${toPct(pct)}%</strong>
   </div>`;
 }
 
@@ -284,6 +285,8 @@ function _drawCharts(container, summaries) {
 // מוחלף בכל render כדי שלא יצטברו מאזינים בכל מעבר בין מסכים.
 let _chartMql = null;
 let _chartMqlHandler = null;
+/** @type {Set<number>|null} שנים פתוחות (כרטיסי שנה מתקפלים) — null עד הרינדור הראשון */
+let _openYears = null;
 
 function _wireChartBreakpoint(container, summaries) {
   if (_chartMql && _chartMqlHandler) _chartMql.removeEventListener('change', _chartMqlHandler);
@@ -311,7 +314,7 @@ export function render(container, state) {
   let html = `<div class="card">
     <h2>${STRINGS.nav.history}</h2>
     <p class="hint">מעקב והשוואה של נתוני השכר לאורך השנים.</p>
-    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.5rem;">
+    <div class="btn-row">
       <button type="button" class="btn-sec" id="btn-add-manual-year">${S.addManualYear}</button>
       ${summaries.length ? `<button type="button" class="btn-primary" id="btn-export-history">${STRINGS.io.exportHistory}</button>` : ''}
     </div>
@@ -331,7 +334,7 @@ export function render(container, state) {
   // של 900 יחידות זה קנה-מידה של ~0.4, כלומר טקסט 15px הוצג כ-6px. מכל ברוחב מלא מחזיר את
   // קנה המידה ל-~1 ומייתר הגדלות גופן מלאכותיות.
   html += `
-    <div class="card chart-stack" style="margin-bottom:2rem;">
+    <div class="card chart-stack">
       <h3>מגמות ושכר</h3>
       <div class="chart-panel">
         <h4>ברוטו/נטו שנתי</h4>
@@ -348,27 +351,32 @@ export function render(container, state) {
     </div>
   `;
 
+  // WP14: כרטיסי שנה מתקפלים — השנה האחרונה פתוחה כברירת מחדל; שאר השנים סגורות עם תקציר
+  // (ברוטו/נטו) בכותרת. במובייל 13 מדדים × כל שנה יצרו עמוד של ~6,600px.
+  if (_openYears == null) _openYears = new Set([summaries[summaries.length - 1].year]);
+
   // Render years in descending order
   for (let i = summaries.length - 1; i >= 0; i--) {
     const sum = summaries[i];
     const isManual = sum.source === 'manual';
     const badgeText = isManual ? S.badgeManual : S.badgeDerived;
-    const badgeColor = isManual ? 'var(--color-text-secondary)' : 'var(--color-accent)';
 
     html += `
-      <div class="card" data-year-card="${sum.year}">
-        <h3 style="color:var(--color-accent); border-bottom:1px solid var(--color-border); padding-bottom:0.5rem; margin-bottom:1rem; display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-          <span>${S.yearSummary} ${sum.year}</span>
-          <span class="hint" style="font-size:0.75rem; font-weight:normal; border:1px solid ${badgeColor}; color:${badgeColor}; border-radius:12px; padding:0.1rem 0.6rem;">${badgeText}</span>
-          ${isManual ? `
-            <span style="margin-inline-start:auto; display:flex; gap:0.5rem;">
-              <button type="button" class="btn-sec btn-edit-manual-year" data-year="${sum.year}" style="padding:0.2rem 0.7rem; font-size:0.85rem;">${S.editManualYear}</button>
-              <button type="button" class="btn-sec btn-delete-manual-year" data-year="${sum.year}" style="padding:0.2rem 0.7rem; font-size:0.85rem;">${S.deleteManualYear}</button>
-            </span>
-          ` : ''}
-        </h3>
+      <details class="card year-card" data-year-card="${sum.year}"${_openYears.has(sum.year) ? ' open' : ''}>
+        <summary>
+          <h3>${S.yearSummary} ${sum.year}</h3>
+          <span class="year-badge${isManual ? ' year-badge-manual' : ''}">${badgeText}</span>
+          <span class="year-peek">${_optCurrency(sum.totalNet)} ${S.net}</span>
+        </summary>
 
-        <div class="settings-grid" style="margin-bottom:1.5rem">
+        ${isManual ? `
+          <div class="btn-row year-actions">
+            <button type="button" class="btn-sec btn-edit-manual-year" data-year="${sum.year}">${S.editManualYear}</button>
+            <button type="button" class="btn-danger-text btn-delete-manual-year" data-year="${sum.year}">${S.deleteManualYear}</button>
+          </div>
+        ` : ''}
+
+        <div class="stat-grid year-stats">
           ${_statBox(S.totalGross, _optCurrency(sum.totalGross), false)}
           ${_statBox(S.totalNet,   _optCurrency(sum.totalNet),   false)}
           ${_statBox(S.avgGross,   _optCurrency(sum.avgMonthlyGross))}
@@ -388,30 +396,30 @@ export function render(container, state) {
           ${isManual ? _statBox(S.monthsCount, sum.monthsCount ?? S.emptyField) : ''}
         </div>
 
-        <form class="inflation-form" data-year="${sum.year}" style="margin-bottom:1.5rem; display:flex; gap:1rem; align-items:flex-end; flex-wrap:wrap;">
-          <label class="field" style="width:150px; margin-bottom:0;">
+        <form class="inflation-form" data-year="${sum.year}">
+          <label class="field">
             <span>${S.inflation}</span>
-            <input type="number" step="0.1" name="inflation" value="${toPct(sum.inflationPct)}" />
+            <input type="number" inputmode="decimal" step="0.1" name="inflation" value="${toPct(sum.inflationPct)}" />
           </label>
           ${isManual ? '' : `
-            <label class="field" style="width:170px; margin-bottom:0;">
+            <label class="field">
               <span>${S.avgPosition}</span>
-              <input type="number" step="0.01" min="0" name="positionPct"
+              <input type="number" inputmode="decimal" step="0.01" min="0" name="positionPct"
                      value="${sum.positionSource === 'snapshot' ? '' : (state.positionPctByYear?.[sum.year] ?? '')}"
                      ${sum.positionSource === 'snapshot' ? 'disabled' : ''}
                      placeholder="${sum.positionSource === 'snapshot' ? 'מחושב מהתמונות' : '100'}" />
             </label>
           `}
-          <button type="submit" class="btn-primary" style="padding:0.4rem 1rem;">${S.updateInflation}</button>
+          <button type="submit" class="btn-primary">${S.updateInflation}</button>
         </form>
 
         ${isManual ? `
-          ${sum.notes ? `<p class="hint">${S.notes}: ${sum.notes}</p>` : ''}
+          ${sum.notes ? `<p class="hint">${S.notes}: ${escapeHtml(sum.notes)}</p>` : ''}
           <div id="manual-year-edit-slot-${sum.year}"></div>
         ` : `
           <h4>חודשי השנה</h4>
-          <div style="overflow-x:auto;">
-            <table class="params-table">
+          <div class="tbl-scroll">
+            <table class="params-table history-months">
               <thead>
                 <tr>
                   <th>${S.month}</th>
@@ -438,12 +446,21 @@ export function render(container, state) {
               </tbody>
             </table>
           </div>
+          <p class="hint src-legend"><span class="src-dot" aria-hidden="true"></span> = ${S.actualSourceLegend}</p>
         `}
-      </div>
+      </details>
     `;
   }
 
   container.innerHTML = html;
+
+  // זוכר אילו שנים פתוחות בין רינדורים (שמירת הגדרה, שינוי אינפלציה וכו')
+  container.querySelectorAll('details.year-card').forEach(d => {
+    d.addEventListener('toggle', () => {
+      const y = Number(d.dataset.yearCard);
+      if (d.open) _openYears.add(y); else _openYears.delete(y);
+    });
+  });
 
   if (summaries.length > 0) {
     _drawCharts(container, summaries);
@@ -522,33 +539,35 @@ export function render(container, state) {
 function _manualYearFormHtml(year, existing, yearLocked) {
   const v = existing || {};
   return `
-    <form class="manual-year-form" style="margin-top:1rem; padding:1rem; border:1px dashed var(--color-border); border-radius:6px; display:flex; flex-wrap:wrap; gap:1rem; align-items:flex-end;">
-      <label class="field" style="width:100px; margin-bottom:0;">
+    <form class="manual-year-form">
+      <label class="field">
         <span>${S.manualYearField}</span>
-        <input type="number" step="1" name="year" value="${year ?? ''}" ${yearLocked ? 'readonly' : ''} />
+        <input type="number" inputmode="numeric" step="1" name="year" value="${year ?? ''}" ${yearLocked ? 'readonly' : ''} />
       </label>
-      <label class="field" style="width:140px; margin-bottom:0;">
+      <label class="field">
         <span>${S.totalGross}</span>
-        <input type="number" step="0.01" name="totalGross" value="${v.totalGross ?? ''}" />
+        <input type="number" inputmode="decimal" step="0.01" name="totalGross" value="${v.totalGross ?? ''}" />
       </label>
-      <label class="field" style="width:140px; margin-bottom:0;">
+      <label class="field">
         <span>${S.totalNet}</span>
-        <input type="number" step="0.01" name="totalNet" value="${v.totalNet ?? ''}" />
+        <input type="number" inputmode="decimal" step="0.01" name="totalNet" value="${v.totalNet ?? ''}" />
       </label>
-      <label class="field" style="width:140px; margin-bottom:0;">
+      <label class="field">
         <span>${S.bonusesGross}</span>
-        <input type="number" step="0.01" name="bonusesGross" value="${v.bonusesGross ?? ''}" />
+        <input type="number" inputmode="decimal" step="0.01" name="bonusesGross" value="${v.bonusesGross ?? ''}" />
       </label>
-      <label class="field" style="width:110px; margin-bottom:0;">
+      <label class="field">
         <span>${S.monthsCount}</span>
-        <input type="number" step="1" min="1" max="12" name="monthsCount" value="${v.monthsCount ?? ''}" />
+        <input type="number" inputmode="numeric" step="1" min="1" max="12" name="monthsCount" value="${v.monthsCount ?? ''}" />
       </label>
-      <label class="field" style="width:200px; margin-bottom:0;">
+      <label class="field manual-year-notes">
         <span>${S.notes}</span>
-        <input type="text" name="notes" value="${v.notes ?? ''}" />
+        <input type="text" name="notes" value="${escapeHtml(v.notes ?? '')}" />
       </label>
-      <button type="submit" class="btn-primary" style="padding:0.4rem 1rem;">${S.save}</button>
-      <button type="button" class="btn-sec btn-cancel-manual-year" style="padding:0.4rem 1rem;">${S.cancel}</button>
+      <div class="btn-row manual-year-acts">
+        <button type="submit" class="btn-primary">${S.save}</button>
+        <button type="button" class="btn-sec btn-cancel-manual-year">${S.cancel}</button>
+      </div>
     </form>
   `;
 }
