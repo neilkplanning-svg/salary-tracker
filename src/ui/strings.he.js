@@ -395,6 +395,7 @@ export const STRINGS = {
     discard:        'בטל שינויים',
     confirmDelete:  'למחוק?',
     delete:         'מחק',
+    desktopModeHint: 'הדפדפן מציג "אתר למחשב" — לתצוגה מותאמת לטלפון כבו את האפשרות בתפריט הדפדפן (⋮ / aA).',
   },
 };
 

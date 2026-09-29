@@ -7,6 +7,7 @@
 import { store } from '../model/store.js';
 import { STRINGS, formatCurrency, escapeHtml } from './strings.he.js';
 import { renderChart } from './charts.js';
+import { CHART_COMPACT_MQ, HEB_MONTHS } from './ui-kit.js';
 import { EARNING_COMPONENTS } from '../engine/defaults.js';
 // ייבוא דינמי (lazy) — SheetJS נטען רק בלחיצה על "ייצוא ל-Excel", לא בכל render של המסך
 const loadExcelIO = () => import('../io/excel-io.js');
@@ -24,7 +25,8 @@ const toPct = v => +(Number(v || 0) * 100).toFixed(2);
 function _monthCell(actualVal, estimateVal, sourceLabel) {
   if (actualVal != null) {
     // WP14: נקודה קטנה במקום "(בפועל)" — הטקסט גלש לשתי שורות בעמודה צרה במובייל; מקרא מתחת לטבלה
-    return `${formatCurrency(actualVal)}<span class="src-dot" title="${sourceLabel}" aria-label="${sourceLabel}"></span>`;
+    // עטיפה אחת: בתצוגת הכרטיסים התא הוא flex-column, והנקודה נשברה לשורה נפרדת מתחת לערך
+    return `<span>${formatCurrency(actualVal)}<span class="src-dot" title="${sourceLabel}" aria-label="${sourceLabel}"></span></span>`;
   }
   return `${formatCurrency(estimateVal || 0)}`;
 }
@@ -280,7 +282,7 @@ function _drawCharts(container, summaries) {
   renderChart(container.querySelector('#chart-inflation'), 'inflation', summaries);
 }
 
-// WP13.1: charts.js בוחר קנבס לפי media query (max-width:640px), ולכן חצייה של נקודת
+// WP13.1: charts.js בוחר קנבס לפי media query CHART_COMPACT_MQ (ui-kit.js), ולכן חצייה של נקודת
 // השבירה — סיבוב מכשיר, שינוי גודל חלון — מחייבת ציור מחדש. מאזין יחיד ברמת המודול,
 // מוחלף בכל render כדי שלא יצטברו מאזינים בכל מעבר בין מסכים.
 let _chartMql = null;
@@ -292,7 +294,7 @@ function _wireChartBreakpoint(container, summaries) {
   if (_chartMql && _chartMqlHandler) _chartMql.removeEventListener('change', _chartMqlHandler);
   if (!window.matchMedia) return;
 
-  _chartMql = window.matchMedia('(max-width: 640px)');
+  _chartMql = window.matchMedia(CHART_COMPACT_MQ);
   _chartMqlHandler = () => {
     // המסך אולי הוחלף מאז — מציירים רק אם המכלים עדיין ב-DOM
     if (!container.isConnected || !container.querySelector('#chart-annual')) return;
@@ -311,8 +313,8 @@ export function render(container, state) {
     monthsByYear[year].push(m);
   }
 
-  let html = `<div class="card">
-    <h2>${STRINGS.nav.history}</h2>
+  let html = `<div class="card page-head">
+    <h2 class="page-title">${STRINGS.nav.history}</h2>
     <p class="hint">מעקב והשוואה של נתוני השכר לאורך השנים.</p>
     <div class="btn-row">
       <button type="button" class="btn-sec" id="btn-add-manual-year">${S.addManualYear}</button>
@@ -419,7 +421,7 @@ export function render(container, state) {
         ` : `
           <h4>חודשי השנה</h4>
           <div class="tbl-scroll">
-            <table class="params-table history-months">
+            <table class="params-table history-months rtable rtable-4">
               <thead>
                 <tr>
                   <th>${S.month}</th>
@@ -436,11 +438,11 @@ export function render(container, state) {
                   const pos = m.estimate?.paramsSnapshot?.personal?.positionPercent;
                   return `
                   <tr>
-                    <td style="font-weight:600">${m.id}</td>
-                    <td>${_monthCell(m.actual?.gross, m.estimate?.gross, S.actualGross)}</td>
-                    <td>${_monthCell(m.actual?.net, m.estimate?.net, S.actualNet)}</td>
-                    <td>${m.actual?.bonuses ? formatCurrency(m.actual.bonuses) : S.emptyField}</td>
-                    <td>${pos == null ? S.emptyField : `${+pos.toFixed(2)}%`}</td>
+                    <td class="rt-title" style="font-weight:600">${HEB_MONTHS[Number(m.id.slice(5, 7)) - 1]}</td>
+                    <td data-label="${S.gross}">${_monthCell(m.actual?.gross, m.estimate?.gross, S.actualGross)}</td>
+                    <td data-label="${S.net}">${_monthCell(m.actual?.net, m.estimate?.net, S.actualNet)}</td>
+                    <td data-label="${S.monthBonuses}">${m.actual?.bonuses ? formatCurrency(m.actual.bonuses) : S.emptyField}</td>
+                    <td data-label="${S.monthPosition}">${pos == null ? S.emptyField : `${+pos.toFixed(2)}%`}</td>
                   </tr>
                 `;}).join('')}
               </tbody>

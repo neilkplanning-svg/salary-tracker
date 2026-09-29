@@ -22,6 +22,7 @@
  */
 
 import { formatCurrency } from './strings.he.js';
+import { CHART_COMPACT_MQ } from './ui-kit.js';
 
 /**
  * שני פרופילי קנבס. הבחירה נעשית לפי רוחב המכל בפועל (ראו pickGeo), כי הגודל הנראה של
@@ -56,13 +57,13 @@ const GEO_COMPACT = {
 
 /**
  * בוחר פרופיל לפי **אותו** media query שמחליף את ה-aspect-ratio של המכל ב-theme.css
- * (max-width: 640px). חשוב שהשניים לא ייקבעו לפי מדדים שונים (רוחב-מכל מול רוחב-חלון):
+ * CHART_COMPACT_MQ ב-ui-kit.js. חשוב שהשניים לא ייקבעו לפי מדדים שונים (רוחב-מכל מול רוחב-חלון):
  * אי-הסכמה ביניהם מחזירה בדיוק את ה"letterboxing" שהפרופילים נועדו למנוע.
  * @returns {object}
  */
 export function pickGeo() {
   const mobile = typeof window !== 'undefined'
-    && window.matchMedia?.('(max-width: 640px)').matches;
+    && window.matchMedia?.(CHART_COMPACT_MQ).matches;
   return mobile ? GEO_COMPACT : GEO_WIDE;
 }
 

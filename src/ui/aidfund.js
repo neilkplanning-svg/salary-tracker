@@ -136,7 +136,7 @@ export function render(container, state) {
 function _summaryHTML(balance, totalDeposited, totalRepayment) {
   return `
     <div class="card">
-      <h3>${STRINGS.aidFund.title}</h3>
+      <h3 class="page-title">${STRINGS.aidFund.title}</h3>
       <div class="aid-summary-grid">
         <div class="aid-sum-item">
           <span class="aid-sum-lbl">${STRINGS.aidFund.balance} (מחושבת)</span>

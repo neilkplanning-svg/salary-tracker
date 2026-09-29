@@ -44,6 +44,22 @@ async function init() {
   window.addEventListener('hashchange', route);
   subscribe(onStateChange);
   window.addEventListener('salary-save-error', () => toast(STRINGS.ui.saveError, { type: 'error', ms: 4000 }));
+  warnIfDesktopModeOnPhone();
+}
+
+/**
+ * WP15: במצב "אתר למחשב" (Chrome/Safari בטלפון) הדפדפן מתעלם מ-meta viewport ומציג את
+ * הדף ברוחב ~980px מוקטן — שום CSS לא יכול לתקן את זה, ולכן מציגים הסבר איך לכבות.
+ * זיהוי: מסך מגע קטן (screen אינו מושפע ממצב המחשב) לעומת חלון רחב.
+ */
+function warnIfDesktopModeOnPhone() {
+  const smallTouchScreen = navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) < 600;
+  if (!smallTouchScreen || window.innerWidth < 900) return;
+  try {
+    if (sessionStorage.getItem('desktopModeHintShown')) return;
+    sessionStorage.setItem('desktopModeHintShown', '1');
+  } catch { /* אחסון חסום — מציגים בכל זאת */ }
+  toast(STRINGS.ui.desktopModeHint, { type: 'info', ms: 9000 });
 }
 
 /** ממלא כל [data-icon] ב-SVG המתאים (האייקונים לא נכתבים ב-index.html כדי לשמור אותו קריא) */
@@ -66,6 +82,9 @@ function route() {
   updateNavState(screen);
   if (switching) {
     document.title = `${SCREEN_TITLES[screen]} · ${STRINGS.appName}`;
+    // WP15: בטלפון שם המסך מוצג בכותרת (כמו באפליקציה) במקום שם האפליקציה הקבוע
+    const titleEl = document.getElementById('app-screen-title');
+    if (titleEl) titleEl.textContent = SCREEN_TITLES[screen];
     closeMoreSheet();
   }
 }
@@ -114,7 +133,13 @@ async function renderScreen(screen, switching) {
         <pre style="font-size:0.8em;white-space:pre-wrap;overflow-x:auto;margin-top:0.5rem">${escapeHtml(err?.stack ?? err?.message ?? String(err))}</pre>
       </div>`;
   }
-  if (switching) window.scrollTo(0, 0);
+  if (switching) {
+    window.scrollTo(0, 0);
+    // כניסה רכה למסך חדש (fade קצר) — תחושת אפליקציה במקום "טעינת עמוד"
+    container.classList.remove('screen-enter');
+    void container.offsetWidth; // מאתחל את האנימציה גם במעבר מהיר בין מסכים
+    container.classList.add('screen-enter');
+  }
 }
 
 function setupNav() {

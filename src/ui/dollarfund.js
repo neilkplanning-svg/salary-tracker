@@ -96,7 +96,7 @@ export function render(container, state) {
 function _summaryHTML(balance, netReceived, personalYtd, rules) {
   return `
     <div class="card">
-      <h3>${S.title}</h3>
+      <h3 class="page-title">${S.title}</h3>
       <p class="hint">${S.hint}</p>
       <div class="aid-summary-grid">
         <div class="aid-sum-item">

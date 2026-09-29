@@ -14,7 +14,7 @@
 import { store } from '../model/store.js';
 import { STRINGS, escapeHtml } from './strings.he.js';
 import { applyTheme } from './app.js';
-import { icon, toast, ltr } from './ui-kit.js';
+import { icon, toast, ltr, MOBILE_MQ } from './ui-kit.js';
 import { EARNING_COMPONENTS, IMPUTATION_COMPONENTS, gradeLabel } from '../engine/defaults.js';
 import { exportJSON, importJSON } from '../io/json-io.js';
 import { exportExcel, importExcel, downloadTemplate } from '../io/excel-io.js';
@@ -31,6 +31,21 @@ let _dirty = false;
 /** @returns {boolean} האם app.js רשאי לרנדר את המסך מחדש אחרי שינוי ב-store */
 export function shouldRerender() {
   return !_dirty;
+}
+
+/**
+ * WP15 — כל קטע הגדרות הוא אקורדיון (details). בטלפון רק "רכיבי שכר" פתוח בהתחלה — המסך
+ * נראה כתפריט הגדרות של אפליקציה ולא כטופס אינטרנט של ~5,000px; בדסקטופ הכול פתוח חוץ
+ * מהפרמטרים הלאומיים. המצב נזכר בין רינדורים (שמירה, ביטול שינויים).
+ * @type {Set<string>|null}
+ */
+let _openSecs = null;
+const SEC_IDS = ['earnings', 'personal', 'dollarFund', 'car', 'imputations', 'national', 'attendance', 'theme', 'sync', 'json', 'template', 'excel'];
+
+/** פתיחת <details> של קטע הגדרות (סגירה ב-</details>) */
+function secOpen(id, title, hint = '') {
+  return `<details class="card settings-sec" data-sec="${id}"${_openSecs.has(id) ? ' open' : ''}>
+        <summary><h3>${title}</h3>${hint ? `<span class="hint summary-hint">${hint}</span>` : ''}</summary>`;
 }
 
 /** תוויות קבוצות רכיבי שכר */
@@ -50,17 +65,21 @@ export function render(container, state) {
   const { national, personal, theme } = state.settings;
   const car = personal.car ?? { hasCompanyCar: false, allowance: 3879, imputation: 0 };
   _dirty = false;
+  if (_openSecs == null) {
+    _openSecs = window.matchMedia?.(MOBILE_MQ).matches
+      ? new Set(['earnings'])
+      : new Set(SEC_IDS.filter(id => id !== 'national'));
+  }
 
   container.innerHTML = `
     <form id="settings-form" novalidate>
-      <div class="card">
-        <h2>${S.title}</h2>
+      <div class="card page-head">
+        <h2 class="page-title">${S.title}</h2>
         <p class="hint">${S.affectsNewOnly}</p>
       </div>
 
       <!-- WP2.4: רכיבי שכר — רשימה קבועה מקטלוג קנוני (לא נערכת); המשתמש מזין סכומים בלבד -->
-      <div class="card">
-        <h3>${S.earningsSection}</h3>
+      ${secOpen('earnings', S.earningsSection)}
         <p class="hint">${S.earningsNote}</p>
         <div class="tbl-scroll">
           <table class="params-table earnings-table">
@@ -84,10 +103,9 @@ export function render(container, state) {
           <input type="checkbox" id="deposit-above-cap" ${personal.trainingFundDepositAboveCap ? 'checked' : ''} style="margin-top:0.2rem;flex-shrink:0" />
           <span style="font-size:0.85em">${S.depositAboveCap}</span>
         </label>
-      </div>
+      </details>
 
-      <div class="card">
-        <h3>${S.personal}</h3>
+      ${secOpen('personal', S.personal)}
         <div class="settings-grid">
           ${numG(S.creditPoints,     'personal.creditPointsQty',          personal.creditPointsQty, ['all'], 'any')}
           ${pctG(S.pensionRate,      'personal.pensionRateEmployee',      personal.pensionRateEmployee, ['all'])}
@@ -98,11 +116,10 @@ export function render(container, state) {
           ${numG(S.ancillaryPensionBase,'personal.ancillaryPensionBase',  personal.ancillaryPensionBase ?? 0, ['all'], 'any')}
         </div>
         <p class="hint">${S.standbyDayValueHint}</p>
-      </div>
+      </details>
 
       <!-- WP10.10: כללי קרן דולרית (מעקב עצמאי, נפרד מהתלוש) — ניתנים לעריכה, לא hard-coded -->
-      <div class="card">
-        <h3>${S.dollarFundSection}</h3>
+      ${secOpen('dollarFund', S.dollarFundSection)}
         <div class="settings-grid">
           ${num(S.dollarFundMinBalance, 'personal.dollarFundRules.minBalanceUsd',      personal.dollarFundRules?.minBalanceUsd      ?? 2000, 'any')}
           ${num(S.dollarFundYearCap,    'personal.dollarFundRules.personalYearCapUsd', personal.dollarFundRules?.personalYearCapUsd ?? 5000, 'any')}
@@ -119,10 +136,9 @@ export function render(container, state) {
             ${num(S.fixedOther,       'personal.fixedAdditions.other',     personal.fixedAdditions?.other ?? 0)}
           </div>
         </details>
-      </div>
+      </details>
 
-      <div class="card">
-        <h3>${S.carSection}</h3>
+      ${secOpen('car', S.carSection)}
         <label class="field-check">
           <input type="checkbox" id="car-toggle" ${car.hasCompanyCar ? 'checked' : ''} />
           <span>${S.hasCompanyCar}</span>
@@ -138,10 +154,9 @@ export function render(container, state) {
             <input type="number" inputmode="decimal" step="any" id="car-imputation" value="${car.imputation ?? 0}" />
           </label>
         </div>
-      </div>
+      </details>
 
-      <div class="card">
-        <h3>${S.imputationsSection}</h3>
+      ${secOpen('imputations', S.imputationsSection)}
         <p class="hint">${S.imputationsNote}</p>
         <div class="tbl-scroll">
           <table class="params-table imputations-table">
@@ -150,11 +165,10 @@ export function render(container, state) {
           </table>
         </div>
         <button type="button" id="add-custom-imp" class="btn-sec add-row-btn">${S.addImputation}</button>
-      </div>
+      </details>
 
       <!-- WP14.5: פרמטרים לאומיים (מדרגות מס/ב"ל/בריאות) — כמעט לא נערכים; מקופלים כברירת מחדל -->
-      <details class="card" id="national-section">
-        <summary><h3>${S.national}</h3><span class="hint summary-hint">${S.nationalCollapsedHint}</span></summary>
+      ${secOpen('national', S.national, S.nationalCollapsedHint)}
         <div class="settings-grid">
           ${num(S.creditPointValue,      'national.creditPointValue',       national.creditPointValue)}
           ${num(S.trainingCap,           'national.trainingFundCap',        national.trainingFundCap)}
@@ -186,8 +200,7 @@ export function render(container, state) {
       </details>
 
       <!-- פרמטרי נוכחות: קוד הפסקה ברירת מחדל -->
-      <div class="card">
-        <h3>פרמטרי נוכחות</h3>
+      ${secOpen('attendance', 'פרמטרי נוכחות')}
         <p class="hint">קוד הפסקה נקבע פעם אחת — חל אוטומטית על כל ימי העבודה (ניתן לשנות ליום ספציפי מהמודל).</p>
         <div class="settings-grid">
           <label class="field">
@@ -210,19 +223,20 @@ export function render(container, state) {
             <span>שישי — כל הנוכחות ש"נ</span>
           </label>
         </div>
-      </div>
+      </details>
 
-      <div class="card">
-        <h3>${S.theme}</h3>
-        <label class="field" style="max-width:240px">
-          <span>${S.theme}</span>
-          <select data-path="theme.mode">
-            <option value="system" ${theme?.mode === 'system' ? 'selected' : ''}>${S.themeSystem}</option>
-            <option value="light"  ${theme?.mode === 'light'  ? 'selected' : ''}>${S.themeLight}</option>
-            <option value="dark"   ${theme?.mode === 'dark'   ? 'selected' : ''}>${S.themeDark}</option>
-          </select>
-        </label>
-      </div>
+      ${secOpen('theme', S.theme)}
+        <div class="settings-grid">
+          <label class="field">
+            <span>${S.theme}</span>
+            <select data-path="theme.mode">
+              <option value="system" ${theme?.mode === 'system' ? 'selected' : ''}>${S.themeSystem}</option>
+              <option value="light"  ${theme?.mode === 'light'  ? 'selected' : ''}>${S.themeLight}</option>
+              <option value="dark"   ${theme?.mode === 'dark'   ? 'selected' : ''}>${S.themeDark}</option>
+            </select>
+          </label>
+        </div>
+      </details>
 
       <div id="settings-errors" class="error-list" role="alert" aria-live="polite"></div>
       <div class="settings-actions">
@@ -239,41 +253,44 @@ export function render(container, state) {
       </div>
     </form>
 
-    <div class="card">
-      <h3>${STRINGS.io.syncSectionTitle}</h3>
+    ${secOpen('sync', STRINGS.io.syncSectionTitle)}
       <p class="hint">${STRINGS.io.syncSectionHint}</p>
       <p id="sync-status-text" class="hint" style="font-weight:600"></p>
       <div class="settings-actions" style="gap:0.75rem">
         <button type="button" id="btn-open-onedrive" class="btn-primary">${STRINGS.io.openFile}</button>
         <button type="button" id="btn-save-onedrive" class="btn-primary">${STRINGS.io.saveFile}</button>
       </div>
-    </div>
+    </details>
 
-    <div class="card">
-      <h3>${STRINGS.io.sectionTitle}</h3>
+    ${secOpen('json', STRINGS.io.sectionTitle)}
       <p class="hint">${STRINGS.io.sectionHint}</p>
       <div class="settings-actions" style="gap:0.75rem">
         <button type="button" id="btn-export-json" class="btn-primary">${STRINGS.io.exportJson}</button>
         <button type="button" id="btn-import-json" class="btn-primary">${STRINGS.io.importJson}</button>
       </div>
-    </div>
+    </details>
 
-    <div class="card">
-      <h3>${STRINGS.io.templateSectionTitle}</h3>
+    ${secOpen('template', STRINGS.io.templateSectionTitle)}
       <p class="hint">${STRINGS.io.templateSectionHint}</p>
       <div class="settings-actions" style="gap:0.75rem">
         <button type="button" id="btn-download-template" class="btn-accent">⬇ ${STRINGS.io.downloadTemplate}</button>
       </div>
-    </div>
+    </details>
 
-    <div class="card">
-      <h3>${STRINGS.io.excelSectionTitle}</h3>
+    ${secOpen('excel', STRINGS.io.excelSectionTitle)}
       <p class="hint">${STRINGS.io.excelSectionHint}</p>
       <div class="settings-actions" style="gap:0.75rem">
         <button type="button" id="btn-export-excel" class="btn-primary">${STRINGS.io.exportExcel}</button>
         <button type="button" id="btn-import-excel" class="btn-primary">${STRINGS.io.importExcel}</button>
       </div>
-    </div>`;
+    </details>`;
+
+  // זוכר אילו קטעים פתוחים (שמירה / ביטול שינויים מרנדרים מחדש)
+  container.querySelectorAll('details.settings-sec').forEach(d => {
+    d.addEventListener('toggle', () => {
+      if (d.open) _openSecs.add(d.dataset.sec); else _openSecs.delete(d.dataset.sec);
+    });
+  });
 
   const form = container.querySelector('#settings-form');
   form.addEventListener('submit', e => onSave(e, state));
@@ -475,12 +492,17 @@ function earningsCatalogRows(earnings) {
     html += `<tr class="group-header"><td colspan="7">${GROUP_LABELS[g] ?? g}</td></tr>`;
     html += comps.map(c => {
       const desc = descOf(c.id);
+      // WP15: שורת-משנה קומפקטית לטלפון ("מס · ב"ל · פנסיה · כל הדירוגים") במקום 4 צ'יפים
+      // + תג דירוג — כך כל רכיב תופס שורה אחת (תווית ↔ סכום) כמו בהגדרות אפליקציה
+      const inBases = [[c.inTax, S.inTaxShort], [c.inNI, S.inNIShort], [c.inPension, S.inPensionShort], [c.inTraining, S.inTrainingShort]]
+        .filter(([on]) => on).map(([, lbl]) => lbl);
+      const meta = `<span class="earn-meta">${escapeHtml([...inBases, gradeLabel(c.appliesToGrades)].join(' · '))}</span>`;
       const labelCell = desc
         ? `<td class="earn-label-cell"><details class="earning-info">
              <summary>${c.label} <span class="info-icon" title="${escapeHtml(desc)}">ⓘ</span></summary>
              <p class="hint">${escapeHtml(desc)}</p>
-           </details></td>`
-        : `<td class="earn-label-cell">${c.label}</td>`;
+           </details>${meta}</td>`
+        : `<td class="earn-label-cell">${c.label}${meta}</td>`;
       return `<tr class="earn-row">
       ${labelCell}
       <td class="earn-amount-cell"><input type="number" step="any" inputmode="decimal"
@@ -505,7 +527,7 @@ function earningsCatalogRows(earnings) {
 function imputationsCatalogRows(imputations) {
   const amountOf = id => imputations.find(i => i.id === id)?.amount ?? 0;
   let html = IMPUTATION_COMPONENTS.map(c => `<tr>
-    <td class="imp-label-cell">${c.label}</td>
+    <td class="imp-label-cell">${c.label}<span class="earn-meta">${escapeHtml(gradeLabel(c.appliesToGrades))}</span></td>
     <td class="imp-amount-cell"><input type="number" step="any" inputmode="decimal"
                data-imp-id="${c.id}" value="${amountOf(c.id)}" aria-label="${c.label} — ${S.impAmount}" /></td>
     <td class="imp-extra-cell"><span class="grade-badge">${gradeLabel(c.appliesToGrades)}</span></td>
@@ -547,7 +569,8 @@ function onSave(e, state) {
   e.preventDefault();
   const form = e.currentTarget;
   const errors = [];
-  let nationalError = false;
+  /** שדות שגויים — WP15: הקטעים (details) שמכילים אותם נפתחים כדי שהשגיאה תהיה גלויה */
+  const badFields = [];
 
   const national = structuredClone(state.settings.national);
   const personal = structuredClone(state.settings.personal);
@@ -566,7 +589,7 @@ function onSave(e, state) {
       let v = parseFloat(input.value);
       if (!Number.isFinite(v) || v < 0) {
         errors.push(`${input.dataset.label || path}: ${S.errNonNegative}`);
-        if (root === 'national') nationalError = true;
+        badFields.push(input);
         return;
       }
       if (t === 'percent') v = v / 100;
@@ -579,8 +602,8 @@ function onSave(e, state) {
   // רכב (נק' 8) — WP6.1: סכומים שליליים נדחים (כמו שדות data-path רגילים)
   const carAllowance  = parseFloat(form.querySelector('#car-allowance').value)  || 0;
   const carImputation = parseFloat(form.querySelector('#car-imputation').value) || 0;
-  if (carAllowance  < 0) errors.push(`${S.carAllowance}: ${S.errNonNegative}`);
-  if (carImputation < 0) errors.push(`${S.carImputation}: ${S.errNonNegative}`);
+  if (carAllowance  < 0) { errors.push(`${S.carAllowance}: ${S.errNonNegative}`);  badFields.push(form.querySelector('#car-allowance')); }
+  if (carImputation < 0) { errors.push(`${S.carImputation}: ${S.errNonNegative}`); badFields.push(form.querySelector('#car-imputation')); }
   personal.car = {
     hasCompanyCar: form.querySelector('#car-toggle').checked,
     allowance:  carAllowance,
@@ -591,7 +614,7 @@ function onSave(e, state) {
   personal.imputations = IMPUTATION_COMPONENTS.map(c => {
     const inp = form.querySelector(`[data-imp-id="${c.id}"]`);
     const amount = parseFloat(inp?.value) || 0;
-    if (amount < 0) errors.push(`${c.label}: ${S.errNonNegative}`);
+    if (amount < 0) { errors.push(`${c.label}: ${S.errNonNegative}`); badFields.push(inp); }
     return { id: c.id, amount, taxable: c.taxable };
   });
 
@@ -600,7 +623,7 @@ function onSave(e, state) {
     const id = tr.dataset.impId;
     const label = tr.querySelector('.custom-imp-label').value.trim() || 'גילום מותאם';
     const amount = parseFloat(tr.querySelector('.custom-imp-amount').value) || 0;
-    if (amount < 0) errors.push(`${label}: ${S.errNonNegative}`);
+    if (amount < 0) { errors.push(`${label}: ${S.errNonNegative}`); badFields.push(tr); }
     const taxable = tr.querySelector('.custom-imp-taxable').checked;
     personal.imputations.push({ id, label, amount, taxable });
   });
@@ -609,7 +632,7 @@ function onSave(e, state) {
   personal.earnings = EARNING_COMPONENTS.map(c => {
     const inp = form.querySelector(`[data-earning-id="${c.id}"]`);
     const amount = parseFloat(inp?.value) || 0;
-    if (amount < 0) errors.push(`${c.label}: ${S.errNonNegative}`);
+    if (amount < 0) { errors.push(`${c.label}: ${S.errNonNegative}`); badFields.push(inp); }
     return { id: c.id, amount };
   });
   personal.trainingFundDepositAboveCap = form.querySelector('#deposit-above-cap').checked;
@@ -618,12 +641,15 @@ function onSave(e, state) {
   validateBands(national.incomeTaxBrackets,      S.incomeTaxBrackets, errors);
   validateBands(national.nationalInsuranceBands, S.niBands,           errors);
   validateBands(national.healthTaxBands,         S.healthBands,       errors);
-  if (errors.length > errorsBeforeBands) nationalError = true;
+  if (errors.length > errorsBeforeBands) badFields.push(form.querySelector('[data-sec="national"]'));
 
   const errBox = form.querySelector('#settings-errors');
   if (errors.length) {
-    // WP14.5: הקטע הלאומי מקופל כברירת מחדל — פותחים אותו כדי שהשדה השגוי יהיה גלוי
-    if (nationalError) form.querySelector('#national-section')?.setAttribute('open', '');
+    // קטעים מקופלים — פותחים כל קטע שמכיל שדה שגוי, כדי שהשגיאה תהיה גלויה ליד השדה
+    // (כולל details מקונן — "שדות ישנים" בתוך קטע הקרן הדולרית)
+    badFields.forEach(el => {
+      for (let d = el?.closest('details'); d; d = d.parentElement?.closest('details')) d.open = true;
+    });
     errBox.innerHTML = `<ul>${errors.map(x => `<li>${x}</li>`).join('')}</ul>`;
     errBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
